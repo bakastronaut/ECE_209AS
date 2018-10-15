@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Spyder Editor
-
-This is a temporary script file.
 """
 
 import numpy as np
@@ -23,12 +21,22 @@ class BigBang:
         All other info is in matrices.
         '''
         assert 0 <= pe <= 1, 'Probability of rotation error (pe) must be: 0 <= pe <= 1'
-        self.width = W
-        self.length = L
+        self.width = W      # x (column) dimension
+        self.length = L     # y (row) dimension
         self.pe = pe
+        self.ID_goal = []   # Value is set by self.InitializePolicy(ID_goal)
+        self.PolicyValue = np.zeros(W*L)
         
         # rewardspace will not include orientation. It only holds a reward for physical location.
         self.rewardspace = np.zeros(W*L)
+        
+        # Initialize gradient, which will be a vector field pointing to the goal
+        self.gradient = np.zeros(self.width*self.length)
+        
+        time = [i for i in range(12)]
+        radians = [(2*np.pi - (t/12)*2*np.pi)%(2*np.pi) for t in time]
+        radians = np.roll(radians,3)
+        self.time2radians = {k:v for k,v in zip(time,radians)}
         
         # Create set of possible actions. Note: actions 0 and 2 are only 
         # permissible if the robot is on the perimeter. All others may occur on
@@ -64,8 +72,8 @@ class BigBang:
         N_states = self.length*self.width
         for ID in range(N_states):
             
-            coords0 = self.stateid_2_coords(ID)
-            coords0 = np.array(coords0[0])
+            coords0 = self.ID2Coords(ID)
+            coords0 = np.array(coords0)
             
             # Determine neighbor state based on translation direction
             idx = 0
@@ -74,10 +82,10 @@ class BigBang:
                 
                 # Try indexing the rewardspace using the neighbor's coordinates.
                 # If successful, change a 0 to a 1 in the adjacency matrix.
-                try:
-                    ID_neighbor = self.coords_2_stateid(coords_neighbor)
+                ID_neighbor = self.Coords2ID(coords_neighbor)
+                if ID_neighbor != np.inf:
                     self.adjacencytensor[ID,ID_neighbor,idx] = 1
-                except IndexError:
+                else:
                     pass
                 
                 idx += 1
@@ -88,17 +96,17 @@ class BigBang:
         print('Adjacency matrix successfully populated!')
         
         # Populate state IDs on grid
-        self.statespace = np.zeros([W,L])
+        self.gridspace = np.zeros([W,L])
        
         # Create grid with each position containing its ID
         count = 0
         for row,col in zip(range(self.width),range(self.length)):
-           self.statespace[row,col] = count
+           self.gridspace[row,col] = count
            count += 1
           
         self.policy = np.zeros([12,W*L,2]) # Initial policy: face 0 and stand still
 
-    def coords_2_stateid(self,coords,rewards=[]):
+    def Coords2ID(self,coords):
         '''
         Converts a list of nested lists, each containing grid row & col coordinates,
         to a list state IDs. The result is two nested lists, one with state IDs 
@@ -115,61 +123,36 @@ class BigBang:
             output - LIST of two lists. First one containing each state ID, second
                     one containing the reward for each state in the first list.
                     If no rewards are provided, second list is empty.
-        '''
-        # Determine whether a list of rewards was received
-        if len(rewards) == 0:
-            norewards = True
-        else:
-            norewards = False
-            assert len(coords) == len(rewards)
+        '''        
+        # Determine the state ID
+        assert len(coords) == 2
         
-        # If a non-nested list of length 2 was provided, make it a nested list.
-        if len(coords) == 2:
-            coords = [coords]
+        if 0 <= coords[0] < self.length and 0 <= coords[1] < self.width:
+            row = coords[0]
+            col = coords[1]
+            ID = self.length*row + col%self.width
         
-        # Determine the state IDs
-        indices = []
-        for i in range(len(coords)):
-           position = coords[i]
-           assert len(position) == 2
-           
-           row = position[0]
-           col = position[1]
-           
-           idx = self.length*row + col%self.width
-           indices.append(idx)
-       
-        # If rewards weren't provided, 2nd list is empty.
-        if norewards:
-            output = [indices,[]]
         else:
-            output = [indices,rewards]
-        return output
+            ID = np.inf
+        
+        return ID
 
 
-    def stateid_2_coords(self,IDlist):
+    def ID2Coords(self,ID):
         '''
         Converts list of state IDs to lists coordinates for each state ID.
        
         Inputs:
-           IDlist - LIST of state IDs
+           ID - INT with grid ID
            
         Outputs:
-           output - LIST (nested) with lists, each containing the row & col
-                    coordinates of each state in IDlist
+           [row,col] - LIST  containing the row & col coordinates of the ID
         '''
-        output = []
-        if type(IDlist) == int:
-            IDlist = [IDlist]
-        for i in range(len(IDlist)):
-            ID = IDlist[i]
-            
-            row = ID//self.length
-            col = ID%self.length
-            assert (row < self.width and col < self.length), "Invalid state ID"
-#            assert self.statespace[row,col] == ID   # Double check that the state at the coordinates agrees with the input iD
-            output.append([row,col])
-        return output
+        row = ID//self.length
+        col = ID%self.length
+        assert (row < self.width and col < self.length), "Invalid state ID"
+    
+        return [row,col]
 
 
     def AssignRewards(self,state_reward):
@@ -227,10 +210,16 @@ class BigBang:
             
         Outputs:
             result - BOOL indicating whether state is in a corner
-        '''
-        N_neighbors = np.sum(self.adjacencytensor[ID,:])
+        '''        
+        IDs_perimeter = []
+        IDs_perimeter.extend([i for i in range(self.length)])
+        a = self.length*(self.length-1) + self.length
+        b = self.length
+        IDs_perimeter.extend([i for i in range(0,a,b)])
+        IDs_perimeter.extend([i+(self.length-1) for i in range(0,a,b)])
+        IDs_perimeter.extend([i for i in range(self.length*(self.length-1),self.width*self.length)])
         
-        if N_neighbors <= 3:
+        if ID in IDs_perimeter:
             result = True
         else:
             result = False
@@ -308,6 +297,9 @@ class BigBang:
             heading = -10
         elif a_trans == -1:
             heading = (orientation - 6)%12
+        else:
+            errormsg = ' '.join(['Invalid drive command received:',str(a_trans)])
+            raise ValueError(errormsg)
         
         if heading == -10:
             adjacent = self.adjacencytensor[ID0,:,0]
@@ -320,17 +312,22 @@ class BigBang:
         elif heading == 9:
             adjacent = self.adjacencytensor[ID0,:,4]
         
+        # If on perimeter and no adjacent states, robot stays still but can rotate.
         if np.sum(adjacent) == 0 and self.IsPerimeter(ID0):
             ID1 = ID0
             theta1 = (theta0 + a_rot)%12
         
+        # If not on perimeter and no adjacent states, something is wrong.
         elif np.sum(adjacent) == 0 and not(self.IsPerimeter(ID0)):
-            raise ValueError('No adjacent cell found, but agent is not on the perimeter. Something is wrong!')
+            errormsg = ' '.join(['No adjacent cell found, but agent is not on the perimeter. Something is wrong! ID:',str(ID0),', direction',str(heading)])
+            raise ValueError(errormsg)
         
+        # If adjacent state found, robot translates and rotates.
         elif np.sum(adjacent) == 1:
             ID1 = np.where(adjacent == 1)[0][0]
             theta1 = (theta0 + a_rot)%12
         
+        # If no cases above are satisfied, something is wrong.
         else:
             errormsg = ' '.join(['Invalid number of adjacent states found for cell',str(ID0),'direction',str(heading)])
             raise ValueError(errormsg)
@@ -392,11 +389,153 @@ class BigBang:
         
         return orientation
     
+    def InitializePolicy(self,ID_goal):
+        '''
+        Creates initial policy for agent based on gradients and geometry.
+        Inputs:
+            ID_goal - INT which is the ID of the grid cell with the goal
+        
+        Outputs:
+            None (modified self.policy)
+        '''
+        self.ID_goal = ID_goal
+        self.InitializeGradient(ID_goal)    # Calculate gradient
+        
+        # Iterate through all orientations and grid cells
+        for theta0 in range(12):
+            phi = self.time2radians[theta0]         # Orientation
+            u = np.array([np.cos(phi),np.sin(phi)]) # Orientation unit vector
+            for ID0 in range(self.width*self.length):
+                
+                # Set the current state and then weigh the options of going forwards of backwards.
+                state0 = [theta0,ID0]
+                
+                ##################
+                # FORWARDS
+                action0_f = [1,0]   # Move fwd, no rotation
+                state1_f = self.GetNextState(state0,action0_f)
+                ID1_f = state1_f[1]
+                delta_f = abs(theta0 - self.gradient[ID1_f])
+                
+                # BACKWARDS
+                action0_b = [-1,0]  # Move bwd, no rotation
+                state1_b = self.GetNextState(state0,action0_b)
+                ID1_b = state1_b[1]
+                delta_b = abs(theta0 - self.gradient[ID1_b])
+                ##################
+                
+                # Deterine which action resulted in the smallest turning angle.
+                # If turning angles are same, choose the one that gets us closer to the goal.
+                # Then, figure out which direction the turn is (CW vs CCW)
+                if abs(delta_f - delta_b) < 5:
+                    coords_goal = self.ID2Coords(ID_goal)
+                    
+                    coords1_f = self.ID2Coords(state1_f[1])
+                    displ1_f = [coords1_f[1] - coords_goal[1],coords1_f[0] - coords_goal[0]]
+                    dist1_f = np.linalg.norm(displ1_f)
+                    
+                    coords1_b = self.ID2Coords(state1_b[1])
+                    displ1_b = [coords1_b[1] - coords_goal[1],coords1_b[0] - coords_goal[0]]
+                    dist1_b = np.linalg.norm(displ1_b)
+                    
+                    arg = np.argmin([dist1_b,dist1_f])
+                    a_trans_star = arg*2 - 1    # Mapping from [0,1] -> [-1,1]
+                    
+                else:
+                    arg = np.argmin([delta_b,delta_f])
+                    a_trans_star = arg*2 - 1    # Mapping from [0,1] -> [-1,1]
+                
+                
+                # If fwd provides an easier turn:
+                if a_trans_star == 1:
+                    time_gradient = self.gradient[ID1_f]
+                
+                # If bwd provides an easier turn:
+                elif a_trans_star == -1:
+                    time_gradient = self.gradient[ID1_b]
+                
+                psi = self.time2radians[time_gradient]  # Angle of gradient vector
+                v = np.array([np.cos(psi),np.sin(psi)])
+                
+                # Get direction of optimal rotation [-1,1] -> [CCW,CW]
+                rot_sign = np.cross(v,u)
+                if rot_sign >= 0:
+                    a_rot_star = 1
+                else:
+                    a_rot_star = -1
+                
+                self.policy[theta0,ID0,0] = a_trans_star
+                self.policy[theta0,ID0,1] = a_rot_star
+    
+    def InitializeGradient(self,ID_goal):
+        '''
+        Generate a vector "gradient" field pointing towards the goal from all other states.
+        This function is called within the policy initialization function.
+        
+        Input:
+            The grid ID of the goal.
+            
+        Output:
+            None (modifies self.gradient)
+        '''
+        IDs = np.zeros([np.size(self.gridspace,0),np.size(self.gridspace,1)])
+        
+        count = 0
+        for row in range(self.length):
+            for col in range(self.width):
+                IDs[row,col] = count
+                count += 1
+        
+        # Create cartesian coordinate system for trigonometry calculations
+        cartesian = np.zeros([np.size(self.gridspace,0),np.size(self.gridspace,1),2])
+        
+        # X values
+        for col in range(self.width):
+            cartesian[:,col,0] = col
+        
+        # Y values
+        for row in range(self.length):
+            cartesian[row,:,1] = -row
+        
+        # Shift cartesian space so goal is at origin
+        coords_goal = self.ID2Coords(ID_goal)
+        cartesian[:,:,0] -= cartesian[coords_goal[0],coords_goal[1],0]
+        cartesian[:,:,1] -= cartesian[coords_goal[0],coords_goal[1],1]
+        
+        # Iterate through all possible states (orientation, location) to generate policy
+        count = 0
+        for y in cartesian[:,0,1]:
+            
+            for x in cartesian[0,:,0]:
+                
+                if x == 0 and y == 0:
+                    psi = np.pi/2
+                
+                else:
+                    v = np.array([x,y])
+                    v = np.transpose(v)
+                    v = -v/np.linalg.norm(v,2)
+    
+                    psi = np.arctan2(v[1],v[0])
+                
+                orientation = round((2*np.pi - psi + np.pi/2)/(2*np.pi/12))%12
+    
+                self.gradient[count] = orientation
+                
+                count += 1
+
+# Uncomment for deugging to see the policy in the physical grid format
+#            output = np.zeros([W,L,12])
+#            
+#            for i in range(12):
+#                output[:,:,i] = np.vstack([policy[i,a:(a+L),0] for a in range(0,W*L,L)])
+    
 class Agent(BigBang):
     def __init__(self,world,state=[0,0],patience=18):
         self.state = state
         self.statehist = [self.state]
         self.errorhist = []
+        self.actionhist = []
         self.patience = patience
         self.world = world
         self.foundcake = False
@@ -405,6 +544,8 @@ class Agent(BigBang):
         print(initmsg)
     
     def UpdateHist(self,state=[],error=[]):
+        '''
+        '''
         if error in [-1,0,1] and state == []:
             self.errorhist.append(error)
             assert (len(self.statehist) == len(self.errorhist)),'When updating the error history, it must be as long as the state history.'
@@ -422,6 +563,8 @@ class Agent(BigBang):
             raise ValueError(errormsg)
         
     def CheckStatus(self):
+        '''
+        '''
         if self.world.GetReward(self.state[1]) == np.max(self.world.rewardspace):
             self.foundcake = True
             
@@ -449,11 +592,15 @@ class Agent(BigBang):
         
         heading = self.RoundTheta(theta0)
         
-        self.state = self.world.GetNextState([heading,ID0],action)
+        ID1 = self.world.GetNextState([heading,ID0],action)[1]
+        
+        self.state = [theta0,ID1]
         
         # No state update here because
     
     def Rotate(self,action):
+        '''
+        '''
         delta = action[1]
         self.state[0] = int((self.state[0] + delta)%12)
         
@@ -477,7 +624,7 @@ class Agent(BigBang):
             None
         
         Outputs:
-            None
+            None (modified agent's state directly)
         '''
         error_eff = 0
         if np.random.rand() <= self.pe:
@@ -490,26 +637,160 @@ class Agent(BigBang):
         
         self.UpdateHist(state=[],error=error_eff)
     
-    def Act(self):
-        action_ideal = self.world.ReadPolicy(self.state)
-        
+    def Act(self,action):
+        '''
+        '''
         # Agent's state is modified directly by each of these steps
         self.RotationError  # Possibly incur rotation error
-        self.Translate(action_ideal) # Move in commanded direction
-        self.Rotate(action_ideal)   # Post-translation rotation
+        self.Translate(action) # Move in commanded direction
+        self.Rotate(action)   # Post-translation rotation
         
-    def Navigate(self):
+    def Navigate(self,iters_max=40):
+        '''
+        '''
+        # Get initial proposed action
         action_proposed = self.world.ReadPolicy(self.state)
         
-        while not(self.foundcake) and not(self.stuck):
+        # While agent has not found cake, is not stuck, and has not given up,
+        # navigate the state space.
+        count = 0
+        while not(self.foundcake) and not(self.stuck) and count <= iters_max:
             state_proposed = self.world.GetNextState(self.state,action_proposed)
             
+            # If current and proposed states are adjacent via proposed action, act.
             if self.world.Probability(self.state,action_proposed,state_proposed) > 0:
-                self.Act()
+                self.Act(action_proposed)
             
-            self.CheckStatus()
+            self.CheckStatus()  # Check to see if robot is stuck.
+            action_proposed = self.world.ReadPolicy(self.state)
+            
+            count += 1
+    
+    def PolicyEvaluator(self):
         
-World = BigBang(6,6,0.5)
+
+def drawArrow(Werld,state,ax):
+    '''
+    Draw an arrow in a given grid cell and orientation
+    '''
+    def R(phi):
+        '''
+        2-dimensional CCW rotation by phi degrees
+        
+        Input:
+            phi - FLOAT indicating rotation angle in radians
+        
+        Output:
+            vector_rotated - NUMPY ARRAY containing the 2 components of the rotated vector
+        '''
+        if phi == Werld.time2radians[0]:
+            phi -= 0.1
+        phi += np.pi
+        
+        vector_rotated = np.array([[np.cos(phi),-np.sin(phi)],[np.sin(phi),np.cos(phi)]])
+        return vector_rotated
+    
+    # Extract state information, get coordinates, and get the orientation in terms of clock time
+    time = state[0]
+    ID = state[1]
+    coords = np.array([ID%6,ID//6])
+    phi = Werld.time2radians[time]
+    
+    # Create reference vector (a rightward arrow at 3:00 is used since that's where
+    # rotation on the unit circle starts. All other orientations will be attained
+    # by rotating this vector CCW).
+    XY = np.array([coords[0] - 0.375, coords[1]])               # Vector head
+    XYTEXT = np.array([coords[0] + 0.375, coords[1] - 0.05])    # Vector tail
+    
+    # Rotate the vector and convert it to a tuple
+    xy = (XY - coords) @ R(phi) + coords
+    xy = tuple(xy)
+    
+    xytext = (XYTEXT - coords) @ R(phi) + coords
+    xytext = tuple(xytext)
+    
+    # Draw the arrow
+    ax.annotate(' ',
+                xy=xy,
+                xycoords='data',
+                xytext=xytext,
+                arrowprops=dict(facecolor='black'))
+
+def plotPolicy(Policy_Aprx,StateValue,Werld,title=[]):
+    '''
+    Plot a policy on the grid space
+    '''
+    
+    # Initialize state value matrix
+    StateValue_matrix = np.zeros([6,6])
+    N_states = len(Policy_Aprx)
+    
+    # If state values weren't provided, set all the values to zero for the plot.
+    if StateValue != []:
+        for s in range(N_states):
+            StateValue_matrix[s%6,s//6] = StateValue[s]
+    
+    # Prepare the figure
+    fig = mpl.pyplot.figure(figsize=(10,8))
+    ax = fig.add_subplot(111)
+    mpl.pyplot.imshow(StateValue_matrix,cmap='Blues')
+    mpl.pyplot.colorbar()
+    
+    # Draw arrows for each state
+    for ID in np.arange(N_states):
+        theta = Policy_Aprx[ID]
+        drawArrow(Werld,[theta,ID],ax)
+    
+    # If a title was provided, add it to the plot.
+    if title != []:
+        mpl.pyplot.title(title)
+        
+    mpl.pyplot.show()
+
+def plotStateHistory(Werld,statehist,StateValue=[]):
+    '''
+    Plot the agent's state history (path and orientation) on the grid
+    
+    Inputs:
+        Werld - BIGBANG object
+        statehist - LIST (nested) with length 2 lists containing state history
+        StateValue - Value to be used as temperature in the plot. Typically the state value or reward
+        
+    Ouputs:
+        None (displays agent's path)
+    '''
+    StateValue_matrix = np.zeros([6,6])
+    N_states = Werld.length*Werld.width
+    
+    if StateValue != []:
+        for s in range(N_states):
+            StateValue_matrix[s%6,s//6] = StateValue[s]
+    
+    fig = mpl.pyplot.figure(figsize=(10,8))
+    ax = fig.add_subplot(111)
+    mpl.pyplot.imshow(StateValue_matrix,cmap='Blues')
+    mpl.pyplot.colorbar()
+    
+    state0 = statehist[0]
+    drawArrow(Werld,state0,ax)
+    for state1 in statehist[1:]:
+        ID0 = state0[1]
+        ID1 = state1[1]
+        
+        coords0 = [ID0%6,ID0//6]
+        coords1 = [ID1%6,ID1//6]
+        
+        mpl.pyplot.plot([coords0[0],coords1[0]], [coords0[1],coords1[1]], 'r--', lw=2)
+        
+        drawArrow(Werld,state1,ax)
+        
+        state0 = state1
+    
+    coords_goal = Werld.ID2Coords(Werld.ID_goal)
+    mpl.pyplot.scatter(coords_goal[1],coords_goal[0],marker='*',s=2000,c='g')
+
+
+World = BigBang(6,6,0)
 
 IDs_red = [0,1,2,3,4,5,6,11,12,17,18,23,24,29,30,31,32,33,34,35]
 rewards_red = [-100 for i in range(len(IDs_red))]
@@ -524,5 +805,11 @@ World.AssignRewards([IDs_red,rewards_red])
 World.AssignRewards([IDs_yellow,rewards_yellow])
 World.AssignRewards([IDs_green,rewards_green])
 
+#World.GetNextState([6,0],[-1,1])
+
+World.InitializePolicy(9)
+
 agent0 = Agent(World,state=[6,7],patience=18)
 agent0.Navigate()
+
+plotStateHistory(World,agent0.statehist[0:20])
