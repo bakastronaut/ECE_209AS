@@ -4,12 +4,14 @@ Spyder Editor
 """
 
 import numpy as np
+import warnings
 import matplotlib as mpl
+import time
 
 class BigBang:
 
 
-    def __init__(self,W,L,pe):
+    def __init__(self,W,L,pe,gamma):
         '''
         Creates gridded world/environment in which agent will operate.
         
@@ -24,8 +26,11 @@ class BigBang:
         self.width = W      # x (column) dimension
         self.length = L     # y (row) dimension
         self.pe = pe
+        self.gamma = gamma
+        
         self.ID_goal = []   # Value is set by self.InitializePolicy(ID_goal)
-        self.PolicyValue = np.zeros(W*L)
+        self.PolicyValue = np.zeros([12,W*L])
+        self.policy = np.zeros([12,W*L,2]) # Initial policy: face 0 and stand still
         
         # rewardspace will not include orientation. It only holds a reward for physical location.
         self.rewardspace = np.zeros(W*L)
@@ -61,11 +66,12 @@ class BigBang:
                                      [  9, 0],
                                      [  9, 1]])
         
-        self.validdirections = list(set(self.actionspace[:,0]))
+        self.validdirections = list(set(np.sort(self.actionspace[:,0])))
+        self.validdirections = list(np.sort(self.validdirections))
        
         # Initialize an array of matrices, one for each possible translation command
         N_directions = len(self.validdirections)   # Number of travel directions(stay,up,right,down,right)
-        self.adjacencytensor = np.zeros([W*L,W*L,N_directions],dtype=int)
+        self.adjacencytensor_trans = np.zeros([W*L,W*L,N_directions],dtype=int)
         
         # Create offset arrays(stay,up,left,down,right)
         directions = [np.array([0,0]),np.array([-1,0]),np.array([0,1]),np.array([1,0]),np.array([0,-1])]
@@ -84,11 +90,32 @@ class BigBang:
                 # If successful, change a 0 to a 1 in the adjacency matrix.
                 ID_neighbor = self.Coords2ID(coords_neighbor)
                 if ID_neighbor != np.inf:
-                    self.adjacencytensor[ID,ID_neighbor,idx] = 1
+                    self.adjacencytensor_trans[ID,ID_neighbor,idx] = 1
                 else:
                     pass
                 
                 idx += 1
+        
+        # List of 4 lists, each with the grid IDs on one side of the grid
+        self.IDs_perimeter = []
+        a = self.length*(self.length-1) + self.length
+        b = self.length
+        # Top edge
+        self.IDs_perimeter.append([i for i in range(self.length)])
+        # Right edge
+        self.IDs_perimeter.append([i+(self.length-1) for i in range(0,a,b)])
+        # Bottom edge
+        self.IDs_perimeter.append([i for i in range(self.length*(self.length-1),self.width*self.length)])
+        # Left edge
+        self.IDs_perimeter.append([i for i in range(0,a,b)])
+        
+        # Add entries for perimeter cells that map back to themselves when
+        # trying to move off the grid.
+        for n,IDs_edge in enumerate(self.IDs_perimeter):
+            for ID in IDs_edge:
+                idx = n+1   # Add 1 to n because the 0 index is for no translation
+                assert idx != 0, 'Index should never be zero here because we''re only conidering moves off the grid.'
+                self.adjacencytensor_trans[ID,ID,idx] = 1
         
         # Check that adjacency matrix is symmetric since graph is undirected
         assert np.sum(self.Symmetricity(True)) == 0
@@ -103,8 +130,6 @@ class BigBang:
         for row,col in zip(range(self.width),range(self.length)):
            self.gridspace[row,col] = count
            count += 1
-          
-        self.policy = np.zeros([12,W*L,2]) # Initial policy: face 0 and stand still
 
     def Coords2ID(self,coords):
         '''
@@ -193,7 +218,7 @@ class BigBang:
         Outputs:
             result - BOOL indicating whether state is on perimeter
         '''
-        N_neighbors = np.sum(self.adjacencytensor[ID,:])
+        N_neighbors = np.sum(self.adjacencytensor_trans[ID,:])
         
         if N_neighbors == 4:
             result = True
@@ -210,42 +235,36 @@ class BigBang:
             
         Outputs:
             result - BOOL indicating whether state is in a corner
-        '''        
-        IDs_perimeter = []
-        IDs_perimeter.extend([i for i in range(self.length)])
-        a = self.length*(self.length-1) + self.length
-        b = self.length
-        IDs_perimeter.extend([i for i in range(0,a,b)])
-        IDs_perimeter.extend([i+(self.length-1) for i in range(0,a,b)])
-        IDs_perimeter.extend([i for i in range(self.length*(self.length-1),self.width*self.length)])
-        
-        if ID in IDs_perimeter:
+        '''
+        ID_list = np.concatenate(self.IDs_perimeter)
+        ID_list = list(ID_list)
+        if ID in ID_list:
             result = True
         else:
             result = False
         return result
 
-    def Adjacency(self,ID0,ID1,direction):
+    def GetAdjacentStates(self,state0):
         '''
-        Determines whether two grid squares are adjacent.
+        Determines all states adjacent to a given state and all actions that lead to those states.
         
         Inputs:
-            ID0 - INT of current state ID (s)
-            ID1 - INT of desired state ID (s')
-            direction - INT indicating direction of travel
+            state0 - LIST containing state information (orientation & location)
         
         Outputs:
-            result - BOOL indicating true or false for adjacency
+            allstates - LIST containing all adjacent states
+            allactions - LIST containing all actions leading to adjacent states
         '''
-        if not(direction in self.validdirections):
-            raise ValueError("Invalid action provided as input! Must be in the set {-10,0,3,6,9}")
-
-        # Determine whether states are adjacent
-        idx = self.validdirections.index(direction)
-        matrixentry = self.adjacencytensor[ID0,ID1,idx]
-        result = bool(matrixentry)
+        allactions = [[0,0],[1,1],[1,0],[1,-1],[-1,1],[-1,0],[-1,-1]]
         
-        return result
+        allstates = []
+        for action in allactions:
+            state1 = self.GetNextState(state0,action)
+            allstates.append(state1)
+        
+        assert len(allstates) == len(allactions)
+        
+        return allstates,allactions
 
     def Symmetricity(self,hiddenmode=False):
         '''
@@ -258,9 +277,9 @@ class BigBang:
             difference - ARRAY; if hiddenmode == True
         '''
         if not(hiddenmode):
-            assert np.sum(self.adjacencytensor) != 0, "Adjacency tensor has not been populated yet."
+            assert np.sum(self.adjacencytensor_trans) != 0, "Adjacency tensor has not been populated yet."
         
-        image = np.sum(self.adjacencytensor,axis=2)
+        image = np.sum(self.adjacencytensor_trans,axis=2)
         difference = image - np.transpose(image)
         
         if not(hiddenmode):
@@ -302,15 +321,15 @@ class BigBang:
             raise ValueError(errormsg)
         
         if heading == -10:
-            adjacent = self.adjacencytensor[ID0,:,0]
+            adjacent = self.adjacencytensor_trans[ID0,:,0]
         elif heading == 0:
-            adjacent = self.adjacencytensor[ID0,:,1]
+            adjacent = self.adjacencytensor_trans[ID0,:,1]
         elif heading == 3:
-            adjacent = self.adjacencytensor[ID0,:,2]
+            adjacent = self.adjacencytensor_trans[ID0,:,2]
         elif heading == 6:
-            adjacent = self.adjacencytensor[ID0,:,3]
+            adjacent = self.adjacencytensor_trans[ID0,:,3]
         elif heading == 9:
-            adjacent = self.adjacencytensor[ID0,:,4]
+            adjacent = self.adjacencytensor_trans[ID0,:,4]
         
         # If on perimeter and no adjacent states, robot stays still but can rotate.
         if np.sum(adjacent) == 0 and self.IsPerimeter(ID0):
@@ -341,22 +360,43 @@ class BigBang:
         theta0 = state0[0]
         ID0 = state0[1]
         
+        rotation_options = [-1,0,1]
+        # Calculation of path probabilities and potential rotation errors
         P_path = [self.pe,1-2*self.pe,self.pe]
-        rotations = [-1,0,1]
-        theta_error = [(theta0 + d)%12 for d in rotations]
-        theta_tilde = [self.RoundTheta(theta) for theta in theta_error] # Call this heading later
-        # a_trans is squared as a quick fix. Algorithm was getting confused on directionality.
-        ID_tilde = [self.GetNextState([t,ID0],action)[1] for t in theta_tilde]
+        
+        theta0new = []      # Theta value after pre-translation rotation error
+        for i in range(len(P_path)):
+            if P_path[i] <= 0:
+                theta0new.append([])
+            
+            elif P_path[i] > 0:
+                theta_update = (theta0 + rotation_options[i])%12
+                theta0new.append(theta_update)
+        
+        heading = []
+        ID1_list = []
+        for j in range(len(theta0new)):
+            theta_new = theta0new[j]
+            if theta_new == []:
+                heading.append([])
+                ID1_list.append([])
+            else:
+                heading.append(self.RoundTheta(theta_new))
+                nextID = self.GetNextState([theta_new,ID0],action)[1]
+                ID1_list.append(nextID)
         
         # Get a list of all possible states reachable from current state using
         # the chosen action.
         allstates = []
-        for ID in ID_tilde:
+        for k in range(len(ID1_list)):
+            ID = ID1_list[k]
             allstates.append([])
-            for rot in rotations:
-                a = (theta0 + rot)%12
-                b = ID
-                allstates[-1].append([a,b])
+            
+            if type(ID) != list:
+                rot = action[1]
+                theta1 = (theta0 + rot)%12
+                ID1 = ID
+                allstates[-1].append([theta1,ID1])
         
         # Calculate total probability
         TotalProbability = 0
@@ -364,6 +404,36 @@ class BigBang:
             group = allstates[i]
             if state1 in group:
                 TotalProbability += P_path[i]
+        
+        # Cross check result with adjacency matrix
+        a_trans = action[0]
+        orientation = self.RoundTheta(theta0)        
+        # Either flip heading, stay in place, or maintain heading based on command
+        if a_trans == 1:
+            direction = orientation
+        elif a_trans == 0:
+            direction = -10
+        elif a_trans == -1:
+            direction = (orientation - 6)%12
+        
+        # Cross check probability calculation with adjacency matrix to make sure they agree
+        assert direction in [-10,0,3,6,9]   # Indices for the matrices in adjacency tensor (still,north,east,south,west)
+        idx = self.validdirections.index(direction)
+        
+        ID1 = state1[1]
+        if TotalProbability == 0:
+            pass
+#            errormsg = ' '.join(['Zero probability, non-zero adjacency entry:',str(state0),'->',str(state1),'via',str(action)])
+#            assert self.adjacencytensor_trans[ID0,ID1,idx] == 0, errormsg
+        elif TotalProbability > 0:
+            errormsg = ' '.join(['Non-zero probability, zero adjacency entry.',str(state0),'->',str(state1),'via',str(action)])
+            assert self.adjacencytensor_trans[ID0,ID1,idx] == 1, errormsg
+        else:
+            errormsg = ' '.join(['Invalid probability value returned! Value:',str(TotalProbability)])
+            raise ValueError(errormsg)
+        
+        # Assert value of total probability is valid
+        assert 0 <= TotalProbability <= 1
         
         if debug:
             return TotalProbability,allstates
@@ -466,6 +536,10 @@ class BigBang:
                 
                 self.policy[theta0,ID0,0] = a_trans_star
                 self.policy[theta0,ID0,1] = a_rot_star
+        
+        ID_star = np.argmax(World.rewardspace)
+        self.policy[:,ID_star,0] = 0
+        self.policy[:,ID_star,1] = 0
     
     def InitializeGradient(self,ID_goal):
         '''
@@ -529,7 +603,254 @@ class BigBang:
 #            
 #            for i in range(12):
 #                output[:,:,i] = np.vstack([policy[i,a:(a+L),0] for a in range(0,W*L,L)])
+
+    def Value(self,policy,gamma=np.inf):
+        
+        # Check to see if custom gamma value was entered
+        if gamma == np.inf:
+            gamma = self.gamma
+        else:
+            warnings.warn('Input gamma is overriding value set during class instantiation.')
+            
+        dims = [np.size(self.policy,0),np.size(self.policy,1)]
+        V0 = self.PolicyValue
+        V1 = np.zeros(dims)
+        
+        # Iterate through all states and calculate the value of each.
+        for theta0 in range(12):
+            
+            for ID0 in range(self.length*self.width):
+                state0 = [theta0,ID0]
+                states_list,actions_list = self.GetAdjacentStates(state0)
+                
+                # Calculate the value
+                action = self.policy[theta0,ID0]
+                for state1 in states_list:
+                    theta1 = state1[0]
+                    ID1 = state1[1]
+                    Likelihood = self.Probability(state0,action,state1)
+                    ROI = self.rewardspace[ID1] + self.gamma*V0[theta1,ID1]
+                    V1[theta0,ID0] += Likelihood*ROI
+        
+        return V1
+
+    def ValueIteration(self,lookahead=1,iters_max = 200,threshold=0):
+        i = 0
+        diff = np.inf
+        valuehist = []
+        
+        # Initialize algorithm with all states listed with zero value.
+        V0 = np.zeros([12,self.width*self.length])
+        policy0score = np.sum(V0)
+        valuehist.append(policy0score)
+        policy1 = self.policy
+        
+        while diff > threshold and i <= iters_max:
+            
+            for theta0 in range(12):
+                
+                for ID0 in range(self.length*self.width):
+                    state0 = [theta0,ID0]
+                    # Get ALL states adjacent to current state 
+                    # (regardless of which action will be chosen)
+                    if lookahead == 1:
+                        states_list,actions_list = self.GetAdjacentStates(state0)
+                    else:
+                        raise ValueError('Does not support lookahead > 1 yet.')
+                    
+                    # Iterate through all possible actions. For each action,
+                    # calculate the value when trying to reach all states 
+                    # adjacent to state0.
+                    values = []
+                    for action in actions_list:
+                        v = 0   # Value for a certain action
+                        for state1 in states_list:
+                            theta1 = state1[0]
+                            ID1 = state1[1]
+                            Likelihood = self.Probability(state0,action,state1)
+                            ROI = self.rewardspace[ID1] + self.gamma*V0[theta1,ID1]
+                            v += Likelihood*ROI
+                        values.append(v)
+                    
+                    assert len(values) != 0
+                    
+                    indices_max = [i for i in range(len(values)) if values[i] == np.min(values)]
+                    # If multiple entries are equal, randomly choose one as highest.
+                    # Otherwise, go with argmax of values.
+                    if len(indices_max) > 1:
+                        n = np.random.randint(low=0,high=len(indices_max))
+                        idx_max = indices_max[n]
+                    else:
+                        idx_max = np.argmax(values)
+                        
+                    action_max = actions_list[idx_max]
+                    value_max = values[idx_max]
+                    if value_max > V0[theta0,ID0]:
+                        policy1[theta0,ID0] = action_max
+            
+            V1 = self.Value(policy1)
+            policy1score = np.sum(V1)
+            valuehist.append(policy1score)
+            
+            diff = abs(policy1score - policy0score)
+            V0 = 1*V1
+            policy0score = 1*policy1score
+            i += 1
+        
+        # If one of the while loop criteria are invalid:
+        if diff <= threshold:
+            self.policy = policy1   # Store optimal policy
+            self.PolicyValue = V1   # Store value of optimal policy
+            msg = ' '.join(['Algorithm converged in',str(i-1),'iterations. New policy has been saved.'])
+        elif i >= iters_max:
+            msg = ' '.join(['Algorithm reached maximum number of iterations with value difference',str(diff)])
+        
+        print(msg)
+        
+        return valuehist
     
+    def PolicyIteration(self,lookahead=1,iters_max = 200,threshold=0):
+        '''
+        Run the policy iteration algorithm to determine the optimal policy
+        
+        Inputs:
+            lookahead - INT setting number of lookahead steps
+            iters_max - INT setting max number of iterations to avoid infinite loops
+            threshold - FLOAT setting threshold for minimum difference in policy 
+                        value between each iteration in order for convergence to
+                        be considered occurring.
+        
+        Outputs:
+            None (updates policy internally for class)
+        '''
+        def pmatrix(policy):
+            '''
+            Returns an |S| x |S| matrix with the probability of transitioning
+            between all combinations of states.
+            
+            Inputs:
+                None (pulls all information from internal class attributes)
+            
+            Outputs:
+                Square matrix with probabilities of transitioning
+            '''
+            
+            S_norm = 12*self.width*self.length  # Size of state space
+            Ps0as1 = np.zeros([S_norm,S_norm])  # P of transitioning from s0 to s1 via a
+            
+            for theta0 in range(12):
+                for ID0 in range(self.width*self.length):
+                    idx_row = (ID0//12)*12 + ID0%12
+                    state0 = [theta0,ID0]
+                    
+                    action = policy[theta0,ID0]
+                    
+                    for theta1 in range(12):
+                        for ID1 in range(self.width*self.length):
+                            idx_col = (ID0//12)*12 + ID0%12
+                            state1 = [theta1,ID1]
+                            
+                            Ps0as1[idx_row,idx_col] = self.Probability(state0,action,state1)
+            return Ps0as1
+        
+        def convergence(policy0,policy1):
+            '''
+            Elementwise comparison of two policies to determine whether they are identical
+            
+            Inputs:
+                policy0 - LIST/ARRAY (1D) containing prior policy
+                policy1 - LIST/ARRAY (1D) containing newly calculated policy
+            
+            Outputs:
+                equal - BOOL indicating whether the policies are identical
+            '''
+            assert len(policy0) == len(policy1)
+            
+            equal = True
+            for i in range(len(policy0)):
+                equal = equal and policy0[i] == policy1[i]
+            
+            return equal
+        
+        # Modidy reward and value arrays/matrices for linear system solving.
+        
+        # Reward is only a fxn of grid position. So the same reward value is
+        # assigned to all 12.
+        
+        # Value is defined per each unique state. So the 12 values associated with
+        # each grid cell are stacked in chunks 12 at a time.
+        R_s = np.zeros([1,12*self.width*self.length])
+        V_s = np.zeros([1,12*self.width*self.length])
+        Value = self.Value(self.policy)
+        for j,ID in enumerate(self.width*self.length):
+            R_s[j*12:(j+1)*12] = self.rewardspace[ID]   # Store reward value in chunks of 12.
+            V_s[j*12:(j+1)*12] = Value[:,ID]            # All values in column #ID in the value matrix
+        R_s = R_s.T
+        V_s = V_s.T
+        
+        
+        policy0 = self.Policy
+        L = pmatrix(policy0)   # Likelihood of state transition
+        policy1 = np.zeros([12,self.width*self.length])
+        policyconverged = False
+        count = 0
+        while not(policyconverged) and count <= iters_max:
+            L_pseudo = np.linalg.pinv(L)
+            V_s_prime = (V_s - R_s) @ L_pseudo
+            
+            for theta0 in range(12):
+                
+                for ID0 in range(self.length*self.width):
+                    state0 = [theta0,ID0]
+                    # Get ALL states adjacent to current state 
+                    # (regardless of which action will be chosen)
+                    if lookahead == 1:
+                        states_list,actions_list = self.GetAdjacentStates(state0)
+                    else:
+                        raise ValueError('Does not support lookahead > 1 yet.')
+                    
+                    # Iterate through all possible actions. For each action,
+                    # calculate the value when trying to reach all states 
+                    # adjacent to state0.
+                    values = []
+                    for action in actions_list:
+                        v = 0   # Value for a certain action
+                        for state1 in states_list:
+                            theta1 = state1[0]
+                            ID1 = state1[1]
+                            Likelihood = self.Probability(state0,action,state1)
+                            v += Likelihood*V_s_prime[theta1,ID1]
+                        v *= self.gamma
+                        v += self.rewardspace[ID1]
+                        values.append(v)
+                    
+                    assert len(values) != 0
+                    
+                    indices_max = [i for i in range(len(values)) if values[i] == np.min(values)]
+                    # If multiple entries are equal, randomly choose one as highest.
+                    # Otherwise, go with argmax of values.
+                    if len(indices_max) > 1:
+                        n = np.random.randint(low=0,high=len(indices_max))
+                        idx_max = indices_max[n]
+                    else:
+                        idx_max = np.argmax(values)
+                        
+                    action_max = actions_list[idx_max]
+                    policy1[theta0,ID0] = action_max
+            
+            policyconverged = convergence(policy0,policy1)
+            policy0 = 1*policy1
+            count += 1
+        
+            if policyconverged:
+                self.Policy = policy0
+                self.PolicyValue = self.Value(policy0)   # Store value of optimal policy
+                msg = ' '.join(['Policy iteration converged in',str(count-1),'iterations. New policy has been saved.'])
+            elif count >= iters_max:
+                msg = ' '.join(['Policy iteration reached maximum number of iterations without convergence'])
+            print(msg)
+        
+
 class Agent(BigBang):
     def __init__(self,world,state=[0,0],patience=18):
         self.state = state
@@ -609,7 +930,7 @@ class Agent(BigBang):
 #    def RotateToHighestReward(self):
 #        if self.IsPerimeter(self.state):
 #            ID0 = self.state[1]
-#            adjacency_neighbors = np.sum(self.adjacencytensor[ID0,:,1:],2)
+#            adjacency_neighbors = np.sum(self.adjacencytensor_trans[ID0,:,1:],2)
 #            IDs_neighbors = [ID for ID,adj in enumerate(adjacency_neighbors) if adj == 1]
 #            Rewards_neighbors = [self.GetReward(ID) for ID in IDs_neighbors]
 #        else:
@@ -665,9 +986,6 @@ class Agent(BigBang):
             action_proposed = self.world.ReadPolicy(self.state)
             
             count += 1
-    
-    def PolicyEvaluator(self):
-        
 
 def drawArrow(Werld,state,ax):
     '''
@@ -747,7 +1065,7 @@ def plotPolicy(Policy_Aprx,StateValue,Werld,title=[]):
         
     mpl.pyplot.show()
 
-def plotStateHistory(Werld,statehist,StateValue=[]):
+def plotStateHistory(Werld,statehist,StateValue=[],title=''):
     '''
     Plot the agent's state history (path and orientation) on the grid
     
@@ -762,11 +1080,12 @@ def plotStateHistory(Werld,statehist,StateValue=[]):
     StateValue_matrix = np.zeros([6,6])
     N_states = Werld.length*Werld.width
     
-    if StateValue != []:
+    if len(StateValue) > 0:
         for s in range(N_states):
-            StateValue_matrix[s%6,s//6] = StateValue[s]
+            StateValue_matrix[s//6,s%6] = StateValue[s]
     
-    fig = mpl.pyplot.figure(figsize=(10,8))
+    F = np.random.randint(low=0,high=1000)
+    fig = mpl.pyplot.figure(num=F,figsize=(10,8))
     ax = fig.add_subplot(111)
     mpl.pyplot.imshow(StateValue_matrix,cmap='Blues')
     mpl.pyplot.colorbar()
@@ -788,9 +1107,14 @@ def plotStateHistory(Werld,statehist,StateValue=[]):
     
     coords_goal = Werld.ID2Coords(Werld.ID_goal)
     mpl.pyplot.scatter(coords_goal[1],coords_goal[0],marker='*',s=2000,c='g')
+    
+    if title != '':
+        mpl.pyplot.title(title)
 
 
-World = BigBang(6,6,0)
+World = BigBang(6,6,0,0.9)
+
+#World.Probability([0, 0],[-1.,  1.],[1, 6])
 
 IDs_red = [0,1,2,3,4,5,6,11,12,17,18,23,24,29,30,31,32,33,34,35]
 rewards_red = [-100 for i in range(len(IDs_red))]
@@ -805,11 +1129,26 @@ World.AssignRewards([IDs_red,rewards_red])
 World.AssignRewards([IDs_yellow,rewards_yellow])
 World.AssignRewards([IDs_green,rewards_green])
 
-#World.GetNextState([6,0],[-1,1])
-
 World.InitializePolicy(9)
 
+# 3(e)
+InitialPolicyValue = World.Value(World.policy,0.9)
 agent0 = Agent(World,state=[6,7],patience=18)
 agent0.Navigate()
+plotStateHistory(World,agent0.statehist,World.rewardspace,'State History - Initial Poicy')
+mpl.pyplot.savefig('3e.png',dpi=300,format='png')
 
-plotStateHistory(World,agent0.statehist[0:20])
+# 4(b)
+valuehist = World.ValueIteration()
+t = time.time()
+agent1 = Agent(World,state=[6,7],patience=18)
+agent1.Navigate()
+
+plotStateHistory(World,agent1.statehist,World.rewardspace,'Optimal State History - Policy Iteration')
+mpl.pyplot.savefig('4b.png',dpi=300,format='png')
+
+# 4(c)
+elapsed_3h = time.time() - t
+
+
+
