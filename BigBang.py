@@ -404,33 +404,34 @@ class BigBang:
             group = allstates[i]
             if state1 in group:
                 TotalProbability += P_path[i]
-        
-        # Cross check result with adjacency matrix
-        a_trans = action[0]
-        orientation = self.RoundTheta(theta0)        
-        # Either flip heading, stay in place, or maintain heading based on command
-        if a_trans == 1:
-            direction = orientation
-        elif a_trans == 0:
-            direction = -10
-        elif a_trans == -1:
-            direction = (orientation - 6)%12
-        
-        # Cross check probability calculation with adjacency matrix to make sure they agree
-        assert direction in [-10,0,3,6,9]   # Indices for the matrices in adjacency tensor (still,north,east,south,west)
-        idx = self.validdirections.index(direction)
-        
-        ID1 = state1[1]
-        if TotalProbability == 0:
-            pass
-#            errormsg = ' '.join(['Zero probability, non-zero adjacency entry:',str(state0),'->',str(state1),'via',str(action)])
-#            assert self.adjacencytensor_trans[ID0,ID1,idx] == 0, errormsg
-        elif TotalProbability > 0:
-            errormsg = ' '.join(['Non-zero probability, zero adjacency entry.',str(state0),'->',str(state1),'via',str(action)])
-            assert self.adjacencytensor_trans[ID0,ID1,idx] == 1, errormsg
-        else:
-            errormsg = ' '.join(['Invalid probability value returned! Value:',str(TotalProbability)])
-            raise ValueError(errormsg)
+                
+                
+                # Cross check result with adjacency matrix
+                a_trans = action[0]
+                orientation = heading[i]        
+                # Either flip heading, stay in place, or maintain heading based on command
+                if a_trans == 1:
+                    direction = orientation
+                elif a_trans == 0:
+                    direction = -10
+                elif a_trans == -1:
+                    direction = (orientation - 6)%12
+                
+                # Cross check probability calculation with adjacency matrix to make sure they agree
+                assert direction in [-10,0,3,6,9]   # Indices for the matrices in adjacency tensor (still,north,east,south,west)
+                idx = self.validdirections.index(direction)
+                
+                ID1 = state1[1]
+                if TotalProbability == 0:
+                    pass
+        #            errormsg = ' '.join(['Zero probability, non-zero adjacency entry:',str(state0),'->',str(state1),'via',str(action)])
+        #            assert self.adjacencytensor_trans[ID0,ID1,idx] == 0, errormsg
+                elif TotalProbability > 0:
+                    errormsg = ' '.join(['Non-zero probability, zero adjacency entry.',str(state0),'->',str(state1),'via',str(action)])
+                    assert self.adjacencytensor_trans[ID0,ID1,idx] == 1, errormsg
+                else:
+                    errormsg = ' '.join(['Invalid probability value returned! Value:',str(TotalProbability)])
+                    raise ValueError(errormsg)
         
         # Assert value of total probability is valid
         assert 0 <= TotalProbability <= 1
@@ -686,7 +687,8 @@ class BigBang:
                     action_max = actions_list[idx_max]
                     value_max = values[idx_max]
                     if value_max > V0[theta0,ID0]:
-                        policy1[theta0,ID0] = action_max
+                        policy1[theta0,ID0,0] = action_max[0]
+                        policy1[theta0,ID0,1] = action_max[1]
             
             V1 = self.Value(policy1)
             policy1score = np.sum(V1)
@@ -764,13 +766,18 @@ class BigBang:
             Outputs:
                 equal - BOOL indicating whether the policies are identical
             '''
-            assert len(policy0) == len(policy1)
+            assert np.size(policy0,0) == np.size(policy1,0)
+            assert np.size(policy0,1) == np.size(policy1,1)
+            assert np.size(policy0,2) == np.size(policy1,2)
             
-            equal = True
-            for i in range(len(policy0)):
-                equal = equal and policy0[i] == policy1[i]
-            
-            return equal
+            count_mismatches = 0
+            for k in range(np.size(policy0,2)):
+                for j in range(np.size(policy0,1)):
+                    for i in range(np.size(policy0,0)):
+                        if policy0[i,j,k] != policy1[i,j,k]:
+                            count_mismatches += 1
+                
+            return count_mismatches
         
         # Modidy reward and value arrays/matrices for linear system solving.
         
@@ -779,24 +786,31 @@ class BigBang:
         
         # Value is defined per each unique state. So the 12 values associated with
         # each grid cell are stacked in chunks 12 at a time.
+        mismatchhist = []
+        
         R_s = np.zeros([1,12*self.width*self.length])
         V_s = np.zeros([1,12*self.width*self.length])
         Value = self.Value(self.policy)
-        for j,ID in enumerate(self.width*self.length):
-            R_s[j*12:(j+1)*12] = self.rewardspace[ID]   # Store reward value in chunks of 12.
-            V_s[j*12:(j+1)*12] = Value[:,ID]            # All values in column #ID in the value matrix
+        for j,ID in enumerate(range(self.width*self.length)):
+            R_s[0:1,j*12:(j+1)*12] = self.rewardspace[ID]   # Store reward value in chunks of 12.
+            V_s[0:1,j*12:(j+1)*12] = Value[:,ID]            # All values in column #ID in the value matrix
         R_s = R_s.T
         V_s = V_s.T
         
         
-        policy0 = self.Policy
+        policy0 = self.policy
         L = pmatrix(policy0)   # Likelihood of state transition
-        policy1 = np.zeros([12,self.width*self.length])
-        policyconverged = False
+        policy1 = np.zeros([12,self.width*self.length,2])
+        N_mismatches = np.inf
         count = 0
-        while not(policyconverged) and count <= iters_max:
+        while N_mismatches > 0 and count <= iters_max:
             L_pseudo = np.linalg.pinv(L)
-            V_s_prime = (V_s - R_s) @ L_pseudo
+            V_s_prime = L_pseudo @ (V_s - R_s)/self.gamma
+            
+            # Convert V_s_prime from a column vector to a matrix (size 12x36)
+            V_s_prime_matrix = np.zeros([12,self.length*self.width])
+            for ID in range(self.length):
+                V_s_prime_matrix[:,ID:(ID+1)] = V_s_prime[ID*12:(ID+1)*12]
             
             for theta0 in range(12):
                 
@@ -819,7 +833,7 @@ class BigBang:
                             theta1 = state1[0]
                             ID1 = state1[1]
                             Likelihood = self.Probability(state0,action,state1)
-                            v += Likelihood*V_s_prime[theta1,ID1]
+                            v += Likelihood*V_s_prime_matrix[theta1,ID1]
                         v *= self.gamma
                         v += self.rewardspace[ID1]
                         values.append(v)
@@ -836,21 +850,25 @@ class BigBang:
                         idx_max = np.argmax(values)
                         
                     action_max = actions_list[idx_max]
-                    policy1[theta0,ID0] = action_max
+                    policy1[theta0,ID0,0] = action_max[0]
+                    policy1[theta0,ID0,1] = action_max[1]
             
-            policyconverged = convergence(policy0,policy1)
+            N_mismatches = convergence(policy0,policy1)
+            mismatchhist.append(N_mismatches)
+            
             policy0 = 1*policy1
             count += 1
         
-            if policyconverged:
-                self.Policy = policy0
-                self.PolicyValue = self.Value(policy0)   # Store value of optimal policy
-                msg = ' '.join(['Policy iteration converged in',str(count-1),'iterations. New policy has been saved.'])
-            elif count >= iters_max:
-                msg = ' '.join(['Policy iteration reached maximum number of iterations without convergence'])
-            print(msg)
+        if N_mismatches == 0:
+            self.Policy = policy0
+            self.PolicyValue = self.Value(policy0)   # Store value of optimal policy
+            msg = ' '.join(['Policy iteration converged in',str(count-1),'iterations. New policy has been saved.'])
+        elif count > iters_max:
+            msg = ' '.join(['Policy iteration reached maximum number of iterations without convergence'])
+        print(msg)
         
-
+        return mismatchhist
+        
 class Agent(BigBang):
     def __init__(self,world,state=[0,0],patience=18):
         self.state = state
@@ -1110,45 +1128,3 @@ def plotStateHistory(Werld,statehist,StateValue=[],title=''):
     
     if title != '':
         mpl.pyplot.title(title)
-
-
-World = BigBang(6,6,0,0.9)
-
-#World.Probability([0, 0],[-1.,  1.],[1, 6])
-
-IDs_red = [0,1,2,3,4,5,6,11,12,17,18,23,24,29,30,31,32,33,34,35]
-rewards_red = [-100 for i in range(len(IDs_red))]
-
-IDs_yellow = [8,10,14,16,20,22]
-rewards_yellow = [-1 for i in range(len(IDs_yellow))]
-
-IDs_green = [9]
-rewards_green = [1]
-
-World.AssignRewards([IDs_red,rewards_red])
-World.AssignRewards([IDs_yellow,rewards_yellow])
-World.AssignRewards([IDs_green,rewards_green])
-
-World.InitializePolicy(9)
-
-# 3(e)
-InitialPolicyValue = World.Value(World.policy,0.9)
-agent0 = Agent(World,state=[6,7],patience=18)
-agent0.Navigate()
-plotStateHistory(World,agent0.statehist,World.rewardspace,'State History - Initial Poicy')
-mpl.pyplot.savefig('3e.png',dpi=300,format='png')
-
-# 4(b)
-valuehist = World.ValueIteration()
-t = time.time()
-agent1 = Agent(World,state=[6,7],patience=18)
-agent1.Navigate()
-
-plotStateHistory(World,agent1.statehist,World.rewardspace,'Optimal State History - Policy Iteration')
-mpl.pyplot.savefig('4b.png',dpi=300,format='png')
-
-# 4(c)
-elapsed_3h = time.time() - t
-
-
-
