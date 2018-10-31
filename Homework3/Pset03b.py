@@ -98,23 +98,14 @@ def compose_C(k0,k1,k2):
     
     return C
 
-def compose_Q(q00=0,q01=0,q02=0,q10=0,q11=0,q12=0,q20=0,q21=0,q22=0):
-    q0 = np.array([q00,q01,q02])
-    q1 = np.array([q10,q11,q12])
-    q2 = np.array([q20,q21,q22])
+def cov_mat(s00=0,s01=0,s02=0,s10=0,s11=0,s12=0,s20=0,s21=0,s22=0):
+    s0 = np.array([s00,s01,s02])
+    s1 = np.array([s10,s11,s12])
+    s2 = np.array([s20,s21,s22])
     
-    Q = np.vstack((q0,q1,q2))
+    S = np.vstack((s0,s1,s2))
     
-    return Q
-
-def compose_V(v00=0,v01=0,v02=0,v10=0,v11=0,v12=0,v20=0,v21=0,v22=0):
-    v0 = np.array([v00,v01,v02])
-    v1 = np.array([v10,v11,v12])
-    v2 = np.array([v20,v21,v22])
-    
-    V = np.vstack((v0,v1,v2))
-    
-    return V
+    return S
 
 def compose_w(Q):
     samples = np.random.multivariate_normal([0,0,0],Q,size=1)
@@ -147,6 +138,7 @@ def omega(volts):
     return j0*volts
 
 def ukf_init(x,y,theta,E_x,E_y,E_theta,E_w=np.zeros([3,1]),E_v=np.zeros([3,1])):
+    
     state0 = np.array([[x],[y],[theta]])
     state0_pred = np.array([[E_x],[E_y],[E_theta]])
     P0 = (state0 - state0_pred) @ (state0 - state0_pred).T
@@ -171,6 +163,16 @@ def ukf_init(x,y,theta,E_x,E_y,E_theta,E_w=np.zeros([3,1]),E_v=np.zeros([3,1])):
     x_v = state0_a_pred[6:9]
     
     return x_x,x_w,x_v,P_x,P_w,P_v
+
+def ukf_init2(distr_state,distr_environ,distr_sensor):
+    mean_state = distr_state[0]
+    cov_state = distr_state[1]
+    mean_environ = distr_environ[0]
+    cov_environ = distr_environ[1]
+    mean_sensor = distr_sensor[0]
+    cov_sensor = distr_sensor[1]
+    
+    return mean_state,mean_environ,mean_sensor,cov_state,cov_environ,cov_sensor
 
 def ukf_calc_X(state_pred,P,L,alpha,k,beta):
     '''
@@ -308,12 +310,6 @@ k1 = 1
 k2 = 1
 C = compose_C(k0,k1,k2)
 
-a = 0.000000
-Q = a*compose_Q(q00=1,q11=1,q22=1)
-
-b = 0.000000
-V = b*compose_V(v00=1,v11=1,v22=1)
-
 u_hist[:,0:1] = u0
 
 s_hist[:,0:1] = s0
@@ -322,21 +318,29 @@ y_hist[:,0:1] = y0
 s_hist_ukf[:,0:1] = s0
 y_hist_ukf[:,0:1] = y0
 
-temp = []
+a = 0
+mean_state = np.array([[x_start],[y_start],[theta_start]])
+cov_state = a*cov_mat(s00=1,s11=1,s22=1)
+
+b = 0
+mean_environ = np.array([[0],[0],[0]])
+cov_environ = b*cov_mat(s00=0,s11=0,s22=0)
+Q = cov_environ
+
+c = 0
+mean_sensor = np.array([[0],[0],[0]])
+cov_sensor = c*cov_mat(s00=0,s11=0,s22=0)
+V = cov_sensor
+
+distr_state = [mean_state,cov_state]
+distr_environ = [mean_environ,cov_environ]
+distr_sensor = [mean_sensor,cov_sensor]
+
+sx_j_pred,sw_j_pred,sv_j_pred,Px,Pw,Pv = ukf_init2(distr_state,distr_environ,distr_sensor)
 for n in range(np.shape(u_hist)[1]):
-    if n == 0:
-        sx_j_pred,sw_j_pred,sv_j_pred,Px,Pw,Pv = ukf_init(x_start,y_start,theta_start,x_start,y_start,theta_start)
-    
-    else:
-        u_k = u_hist[:,n:(n+1)]
-        sx_j_pred = s_hist_ukf[:,n:(n+1)]
-        sw_j_pred = compose_w(Q)
-        sv_j_pred = compose_w(V)
-        
-        B = compose_B(sx_j_pred,u_k)
+    u_k = u_hist[:,n:(n+1)]
     
     Xx_j,Xw_j,Xv_j,Wm,Wc = ukf_calc_sigma_n_weights(sx_j_pred,sw_j_pred,sv_j_pred,Px,Pw,Pv,alpha=1E-1,k=0,beta=2)
-    temp.append(Xx_j)
 
     # Variables at time j go in; variables at time k come out.
     # y_k_minus is state covariance matrix prior to measrement update
@@ -349,6 +353,13 @@ for n in range(np.shape(u_hist)[1]):
     
     s_hist_ukf[:,(n+1):(n+2)] = s_k
     y_hist_ukf[:,(n+1):(n+2)] = y_k
+    
+    # Get variables for next iteration
+    sx_j_pred = s_k
+#    sw_j_pred = compose_w(Q)
+#    sv_j_pred = compose_w(V)
+    
+    B = compose_B(sx_j_pred,u_k)
     
 for n in range(np.shape(u_hist)[1]):
     s = s_hist[:,n:(n+1)]
