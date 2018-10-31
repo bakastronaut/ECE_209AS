@@ -13,11 +13,13 @@ When done debugging, convert phi as control variable to voltage.
 import numpy as np
 import matplotlib as mpl
 
-def plot_results(s,y,u):
+def plot_results(state,output,command,title=''):
     # Plot the trajectory
+    fig = mpl.pyplot.figure(np.random.randint(low=0,high=100))
+    mpl.pyplot.title(title)
     mpl.pyplot.subplot2grid((3,3),(0,0),rowspan=3)
-    mpl.pyplot.plot(s[0,:],s[1,:])
-    mpl.pyplot.plot(y[0,:],y[1,:],'--')
+    mpl.pyplot.plot(state[0,:],state[1,:])
+    mpl.pyplot.plot(output[0,:],output[1,:],'--')
     
     color = 'tab:grey'
     linestyle = 'dashed'
@@ -26,34 +28,39 @@ def plot_results(s,y,u):
     mpl.pyplot.plot([-250E-3,250E-3],[-375E-3,-375E-3],color=color,linestyle=linestyle)
     mpl.pyplot.plot([-250E-3,-250E-3],[-375E-3,375E-3],color=color,linestyle=linestyle)
     
-    xmin = np.min([np.min(s[0,:]),-250E-3])
-    xmax = np.max([np.max(s[0,:]),250E-3])
-    ymin = np.min([np.min(s[1,:]),-375E-3])
-    ymax = np.max([np.max(s[1,:]),375E-3])
+    xmin = np.min([np.min(state[0,:]),-250E-3])
+    xmax = np.max([np.max(state[0,:]),250E-3])
+    ymin = np.min([np.min(state[1,:]),-375E-3])
+    ymax = np.max([np.max(state[1,:]),375E-3])
     k = 1.2
     mpl.pyplot.xlim(k*xmin,k*xmax)
     mpl.pyplot.ylim(k*ymin,k*ymax)
     
     # Plot the translation state and output histories
-    xvals = dt*np.arange(0,np.shape(s)[1])
+    xvals = dt*np.arange(0,np.shape(state)[1])
     mpl.pyplot.subplot2grid((3,3),(0,1),colspan=2)
-    mpl.pyplot.plot(xvals,s[0,:])
-    mpl.pyplot.plot(xvals,s[1,:])
-    mpl.pyplot.plot(xvals,y[0,:],'--')
-    mpl.pyplot.plot(xvals,y[1,:],'--')
+    mpl.pyplot.plot(xvals,state[0,:])
+    mpl.pyplot.plot(xvals,state[1,:])
+    mpl.pyplot.plot(xvals,output[0,:],'--')
+    mpl.pyplot.plot(xvals,output[1,:],'--')
     mpl.pyplot.legend(['state - x','state - y','output - x','output - y'])
     
     # Plot the rotation state and output histories
     mpl.pyplot.subplot2grid((3,3),(1,1),colspan=2)
-    mpl.pyplot.plot(xvals,s[2,:])
-    mpl.pyplot.plot(xvals,y[2,:],'--')
+    mpl.pyplot.plot(xvals,state[2,:])
+    mpl.pyplot.plot(xvals,output[2,:],'--')
+    ymin = np.min([state[2,:],output[2,:]])
+    ymax = np.max([state[2,:],output[2,:]])
+    k = 0.1
+    mpl.pyplot.ylim([ymin - k,ymax + k])
+    mpl.pyplot.ticklabel_format(axis='y',useOffset=False)
     mpl.pyplot.legend(['State - Heading','Output - Heading'])
     
     # Plot the control history
-    xvals = np.arange(0,np.shape(u)[1])
+    xvals = np.arange(0,np.shape(command)[1])
     mpl.pyplot.subplot2grid((3,3),(2,1),colspan=2)
-    mpl.pyplot.plot(xvals,u[0,:])
-    mpl.pyplot.plot(xvals,u[1,:])
+    mpl.pyplot.plot(xvals,command[0,:])
+    mpl.pyplot.plot(xvals,command[1,:])
     mpl.pyplot.legend(['phi_dot_left','phi_dot_right'])
     
     mpl.pyplot.show()
@@ -149,92 +156,110 @@ def ukf_init(x,y,theta,E_x,E_y,E_theta,E_w=np.zeros([3,1]),E_v=np.zeros([3,1])):
     
     P0_a = (state0_a - state0_a_pred) @ (state0_a - state0_a_pred).T    # Augmented initial covariance matrix
     
-    assert np.equal(P0,P0_a[0:3,0:3]), 'First block on diagonal should be P0'
-    
-#    P0 0 0
-#    0 Pv 0
-#    0 0 Pa
-    
-    return state0_a_pred,P0_a
+    assert np.sum(np.equal(P0,P0_a[0:3,0:3])) == 9, 'First block on diagonal should be P0'
 
-def ukf_calc_X(state_a_pred,P_a,alpha=1E-3,k=0,beta=2):
-    L = np.shape(state_a_pred)[0]
+#           Px 00 00
+#   P0_a =  00 Pw 00
+#           00 00 Pv
 
+    P_x = P0_a[0:3,0:3]
+    P_w = P0_a[3:6,3:6]
+    P_v = P0_a[6:9,6:9]
+    
+    x_x = state0_a_pred[0:3]
+    x_w = state0_a_pred[3:6]
+    x_v = state0_a_pred[6:9]
+    
+    return x_x,x_w,x_v,P_x,P_w,P_v
+
+def ukf_calc_X(state_pred,P,L,alpha,k,beta):
+    '''
+    Used above within fxn ukf_init()
+    '''
     lamda = (alpha**2) * (L + k) - L
     
-    X = np.zeros([L,2*L])
-    for i in range(L):
-        
-        B = np.sqrt( (L + lamda) * P_a )
-        
-        if i == 0:
-            X[:,0:1] = state_a_pred
-        
-        else:
-            X[:,i:i+1] = state_a_pred + B[i:i+1,:].T
+    N = 2*L + 1         # Number of columns (vectors) in sigma vector
+    X = np.zeros([L,N])
     
-    for j in range(L,2*L):
-            X[:,j:j+1] = state_a_pred - B[j-L:j-L+1,:].T
+    X[:,0:1] = state_pred
+    for i in range(1,L+1):
+        B = np.sqrt( (L+lamda) * P[i-1:i-1+1,:] )
+        X[:,i:i+1] = state_pred + B.T
+    
+    for j in range(L+1,N+1):
+        B = np.sqrt( (L+lamda) * P[j-L-1:j-L+1-1,:] )
+        X[:,j:j+1] = state_pred - B.T
     
     return X
 
-def ukf_calc_WcWm(L,lamda,alpha=1E-3,k=0,beta=2):
-    Wm = np.zeros([2*L,1])
-    Wc = np.zeros([2*L,1])
-    for i in range(2*L):
+def ukf_calc_WcWm(L,lamda,alpha,k,beta):
+    N = 2*L + 1         # Number of columns (vectors) in sigma vector
+    Wm = np.zeros([N,1])
+    Wc = np.zeros([N,1])
+    for i in range(N):
         if i == 0:
             Wm[0,0] = lamda/(L+lamda)
-            Wc[0,0] = Wm[0,0] + ( 1 - alpha**2 + beta)
+            Wc[0,0] = lamda/(L+lamda) + ( 1 - alpha**2 + beta)
         
         else:
-            Wm[i,0] = 1/( 2*(L + lamda) )
-            Wc[i,0] = Wm[i,0]
+            Wm[i,0] = 1/( 2*(L+lamda) )
+            Wc[i,0] = 1/( 2*(L+lamda) )
+    
+    k = 1
+    assert 1-k <= lamda/(L+lamda) + 2*L * 1/(2*(L+lamda)) <= 1
     
     return Wm,Wc
 
-def ukf_calc_sigma_n_weights(x,P,alpha=1E-3,k=0,beta=2):
-    X = ukf_calc_X(x,P)
+def ukf_calc_sigma_n_weights(xx_j_pred,xw_j_pred,xv_j_pred,Px,Pw,Pv,alpha,k,beta):
     
-    L = len(x)
+    L = np.shape(xx_j_pred)[0]  # Number of rows in state vector
+    
+    Xx = ukf_calc_X(xx_j_pred,Px,L,alpha=alpha,k=k,beta=beta)
+    Xw = ukf_calc_X(xw_j_pred,Pw,L,alpha=alpha,k=k,beta=beta)
+    Xv = ukf_calc_X(xv_j_pred,Pv,L,alpha=alpha,k=k,beta=beta)
+    
+    assert len(xx_j_pred) == len(xw_j_pred) == len(xv_j_pred) == 3
+    
     lamda = (alpha**2) * (L + k) - L
-    Wm,Wc = ukf_calc_WcWm(L,lamda)
+    Wm,Wc = ukf_calc_WcWm(L,lamda,alpha=alpha,k=k,beta=beta)
     
-    return X,Wm,Wc
+    return Xx,Xw,Xv,Wm,Wc
 
-def ukf_time_update(F,H,X,Wm,Wc):
+def ukf_time_update(F,H,A,B,u,Xx_j,Xw_j,Xv_j,Wm,Wc):
     '''
     j - time during previous action
     k - time during current action
     '''
-    L = (np.shape(X)[0])/3
-    assert type(L) == int
-    
-    Xx_j = X[0:3,:]
-    Xw_j = X[3:6,:]
-    Xv_j = X[6:9,:]
+    L = np.shape(Xx_j)[0]
     
     Xx_k_given_j = F(A,Xx_j,B,u,Xw_j)
-    x_k_minus = np.sum( [Wm[i,0] * Xx_k_given_j[:,i] for i in range(2*L)] )
-    
-    Z = (Xx_k_given_j - x_k_minus)
-    P_k_minus = np.sum( [Wc[i,0] * (Z @ Z.T) for i in range(2*L)] )
+    s_k_minus = np.sum( [Wm[i,0] * Xx_k_given_j[:,i:i+1] for i in range(2*L+1)] ,axis=0)
     
     Y_k_given_j = H(C,Xx_k_given_j,Xv_j)
-    y_k_minus = np.sum(Wm[i,0] * Y_k_given_j[:,i] for i in range(2*L))
+    y_k_minus = np.sum( [Wm[i,0] * Y_k_given_j[:,i:i+1] for i in range(2*L+1)] ,axis=0)
     
-    return P_k_minus,y_k_minus
+    Z = (Xx_k_given_j - s_k_minus)
+    P_k_minus = np.sum( [Wc[i,0] * (Z @ Z.T) for i in range(2*L+1)] ,axis=0)
+    
+    return P_k_minus,s_k_minus,y_k_minus,Y_k_given_j,Xx_k_given_j
 
-def ukf_msmt_update(F,H,X,Wm,Wc,s_k_minus,y_k,y_k_minus,P_k_minus):
-    P_yy = np.sum()
-    P_xy = np.sum()
+def ukf_msmt_update(H,C,Wc,s_k_minus,y_k_minus,P_k_minus,Y_k_given_j,Xx_k_given_j,v):
+    L = np.shape(Xx_k_given_j)[0]
+    
+    A = Y_k_given_j - y_k_minus
+    B = Xx_k_given_j - s_k_minus
+    P_yy = np.sum( [[Wc[i,0]] * A @ A.T for i in range(2*L+1)] ,axis=0)
+    P_xy = np.sum( [[Wc[i,0]] * B @ A.T for i in range(2*L+1)] ,axis=0)
     
     K = P_xy @ np.linalg.pinv(P_yy)
+    
+    y_k = H(C,s_k_minus,v)
     
     s_k = s_k_minus + K @ (y_k - y_k_minus)
     
     P_k = P_k_minus - K @ P_yy @ K.T
     
-    return s_k,P_k
+    return s_k,y_k,P_k
 
 def F(A,s,B,u,w):
     return A @ s + B @ u + w
@@ -242,6 +267,9 @@ def F(A,s,B,u,w):
 def H(C,s,v):
     return C @ s + v
 
+###############################################################################
+###############################################################################
+###############################################################################
 ###############################################################################
     
 m_c = 0.3
@@ -251,17 +279,23 @@ delta = (85E-3)/2   # 42.5 mm
 dt = 0.1
 I_c = (1/12) * m_c * (2*delta)**2
 
-phi_dot_l = np.concatenate((np.zeros(1),np.ones(20),np.ones(100),0.5*np.ones(100),np.ones(400)),0)
-phi_dot_r = np.concatenate((np.zeros(1),-1*np.ones(20),np.ones(100),np.ones(100),np.ones(400)),0)
+phi_dot_l = np.concatenate((np.ones(1),np.ones(20),np.ones(100),0.5*np.ones(100),np.ones(400)),0)
+phi_dot_r = np.concatenate((np.ones(1),-1*np.ones(20),np.ones(100),np.ones(100),np.ones(400)),0)
+
+#phi_dot_l = np.concatenate((np.ones(1),np.ones(20)),0)
+#phi_dot_r = np.concatenate((np.ones(1),np.ones(20)),0)
 
 u_hist = np.vstack((phi_dot_l,phi_dot_r))
 s_hist = np.zeros([3,np.shape(u_hist)[1]+1])
 y_hist = np.zeros([3,np.shape(u_hist)[1]+1])
 
+s_hist_ukf = np.zeros([3,np.shape(u_hist)[1]+1])
+y_hist_ukf = np.zeros([3,np.shape(u_hist)[1]+1])
+
   # rad/sec/volt # motor control gain
 
-x0,y0,theta0 = 0,0,0
-s0 = np.array([[x0,y0,theta0]]).T
+x_start,y_start,theta_start = 0,0,np.pi/2
+s0 = np.array([[x_start,y_start,theta_start]]).T
 y0 = 1*s0
 u0 = np.array([[u_hist[0][0],u_hist[1][0]]]).T
 
@@ -280,16 +314,47 @@ Q = a*compose_Q(q00=1,q11=1,q22=1)
 b = 0.000000
 V = b*compose_V(v00=1,v11=1,v22=1)
 
-s_hist[:,0:1] = s0
-y_hist[:,0:1] = y0
 u_hist[:,0:1] = u0
 
+s_hist[:,0:1] = s0
+y_hist[:,0:1] = y0
+
+s_hist_ukf[:,0:1] = s0
+y_hist_ukf[:,0:1] = y0
+
+temp = []
+for n in range(np.shape(u_hist)[1]):
+    if n == 0:
+        sx_j_pred,sw_j_pred,sv_j_pred,Px,Pw,Pv = ukf_init(x_start,y_start,theta_start,x_start,y_start,theta_start)
+    
+    else:
+        u_k = u_hist[:,n:(n+1)]
+        sx_j_pred = s_hist_ukf[:,n:(n+1)]
+        sw_j_pred = compose_w(Q)
+        sv_j_pred = compose_w(V)
+        
+        B = compose_B(sx_j_pred,u_k)
+    
+    Xx_j,Xw_j,Xv_j,Wm,Wc = ukf_calc_sigma_n_weights(sx_j_pred,sw_j_pred,sv_j_pred,Px,Pw,Pv,alpha=1E-1,k=0,beta=2)
+    temp.append(Xx_j)
+
+    # Variables at time j go in; variables at time k come out.
+    # y_k_minus is state covariance matrix prior to measrement update
+    # y_k_minus is output vector prior to measurement update
+    P_k_minus,s_k_minus,y_k_minus,Y_k_given_j,Xx_k_given_j = ukf_time_update(F,H,A,B,u_k,Xx_j,Xw_j,Xv_j,Wm,Wc)
+    
+    # s_k is updated state estimate after measurement
+    # P_k is updated output covariance estimate after measurement
+    s_k,y_k,P_k = ukf_msmt_update(H,C,Wc,s_k_minus,y_k_minus,P_k_minus,Y_k_given_j,Xx_k_given_j,sv_j_pred)
+    
+    s_hist_ukf[:,(n+1):(n+2)] = s_k
+    y_hist_ukf[:,(n+1):(n+2)] = y_k
+    
 for n in range(np.shape(u_hist)[1]):
     s = s_hist[:,n:(n+1)]
     u = u_hist[:,n:(n+1)]
     w = compose_w(Q)
     v = compose_w(V)
-
     
     s = F(A,s,B,u,w)
     y = H(C,s,v)
@@ -302,4 +367,5 @@ for n in range(np.shape(u_hist)[1]):
     u = u_hist[:,n:(n+1)]
     B = compose_B(s,u)
 
-plot_results(s_hist,y_hist,u_hist)
+plot_results(s_hist,y_hist,u_hist,'No State Estimation')
+plot_results(s_hist_ukf,y_hist_ukf,u_hist,'Unscented Kalman Filter')
