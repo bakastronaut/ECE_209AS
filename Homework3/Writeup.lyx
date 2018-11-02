@@ -1,0 +1,850 @@
+#LyX 2.2 created this file. For more info see http://www.lyx.org/
+\lyxformat 508
+\begin_document
+\begin_header
+\save_transient_properties true
+\origin unavailable
+\textclass article
+\use_default_options true
+\maintain_unincluded_children false
+\language english
+\language_package default
+\inputencoding auto
+\fontencoding global
+\font_roman "default" "default"
+\font_sans "default" "default"
+\font_typewriter "default" "default"
+\font_math "auto" "auto"
+\font_default_family default
+\use_non_tex_fonts false
+\font_sc false
+\font_osf false
+\font_sf_scale 100 100
+\font_tt_scale 100 100
+\graphics default
+\default_output_format default
+\output_sync 0
+\bibtex_command default
+\index_command default
+\paperfontsize default
+\use_hyperref false
+\papersize default
+\use_geometry false
+\use_package amsmath 1
+\use_package amssymb 1
+\use_package cancel 1
+\use_package esint 1
+\use_package mathdots 1
+\use_package mathtools 1
+\use_package mhchem 1
+\use_package stackrel 1
+\use_package stmaryrd 1
+\use_package undertilde 1
+\cite_engine basic
+\cite_engine_type default
+\biblio_style plain
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date false
+\justification true
+\use_refstyle 1
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation indent
+\paragraph_indentation default
+\quotes_language english
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\end_header
+
+\begin_body
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+section*{Mathematical Setup}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+subsection*{Model Definition}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+List of assumptions:
+\end_layout
+
+\begin_layout Itemize
+No friction
+\end_layout
+
+\begin_layout Itemize
+Inertial reference frames
+\begin_inset Foot
+status open
+
+\begin_layout Plain Layout
+I was planning to relax this assumption, but did not have time.
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+The problem was setup using two reference frames: 1) Body-fixed frame 2)
+ Earth- (World-) fixed frame.
+ The body-fixed frame is indicated by the primed vectors.
+ The x'-axis is forward-facing, the y'-axis extend from the left side of
+ the vehicle, and the z'-axis completes the orthogonal system.
+ The Earth-fixed frame is defined with the z-axis pointing downwards as
+ well.
+\end_layout
+
+\begin_layout Standard
+\align center
+\begin_inset Graphics
+	filename ReferenceFrames.png
+	lyxscale 40
+	scale 40
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Using Newton's second law for in the body frame (primed variables), forces
+ are only applied along the x-axis.
+ The equation of motion (EOM) becomes:
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+bigskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $\sum F_{x}=m\ddot{x}'=F_{left}+F_{right}\Longrightarrow\ddot{x}'=\frac{1}{m_{c}}\left(m_{w}\ddot{\phi}_{L}+m_{w}\ddot{\phi}_{R}\right)$
+\end_inset
+
+
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+bigskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+The dynamics equations are discretely summed once (integral analog) to get
+ the body x frame velocity, which is then transformed to the world frame
+ using a 2D rotation matrix.
+ Those equations are then integrated to get x position as a function of
+ the two wheel angular velocities:
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+bigskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $x_{t+1}=x_{t}+r\frac{m_{w}}{m_{c}}\left(\dot{\phi_{L_{t}}}+\dot{\phi_{R_{t}}}\right)\Delta t\cdot cos\theta_{t}$
+\end_inset
+
+ (1) 
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $y_{t+1}=y_{t}+r\frac{m_{w}}{m_{c}}\left(\dot{\phi_{L_{t}}}+\dot{\phi_{R_{t}}}\right)\Delta t\cdot sin\theta_{t}$
+\end_inset
+
+ (2)
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+bigskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Then, Newton's second analog is applied for torques about the body z axis:
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+bigskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $\sumτ_{z}=I_{z}\ddot{\theta}=τ_{L}-τ_{R}$
+\end_inset
+
+ (3) 
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+bigskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+where 
+\begin_inset Formula $I_{z}$
+\end_inset
+
+ the rotational inertia about the z-axis, assumed to be a cylinder rotating
+ about its primary axis:
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+bigskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $I_{z}=\frac{1}{12}m_{c}\left(2\delta\right)^{2}$
+\end_inset
+
+ (4)
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+bigskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Before summing the torques, the center of torque must be found as a function
+ of the torques produced by the individual wheels.
+ This is done by setting the torques equal to each other and solving for
+ the moment arm of the left motor:
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+bigskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $τ_{L}=τ_{R}\Longrightarrow\gamma F_{L}=\left(2\delta-\gamma\right)F_{R}$
+\end_inset
+
+ (5)
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+bigskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+When gamma is solved for, the following expression of the location of center
+ of torque relative to the left wheel is obtained:
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+bigskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $\gamma=2\delta\left(1-\frac{1}{\frac{F_{L}}{F_{R}}+1}\right)$
+\end_inset
+
+ (6)
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+bigskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+When plotted, it verifies that the center of rotation remains within the
+ body of the robot, which is valid since we will let the translation equations
+ take care of the translational component when the center of mass is not
+ under pure rotation:
+\end_layout
+
+\begin_layout Standard
+\align center
+\begin_inset Graphics
+	filename CenterOfRotation.png
+	lyxscale 50
+	scale 50
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+When substituted into the EOM, an expression for angular acceleration about
+ the z-axis follows from (3):
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+bigskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $\ddot{\theta}=\frac{1}{I_{z}}\left(\gamma F_{L}+\gamma F_{R}-2\delta F_{R}\right)$
+\end_inset
+
+ (7)
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+bigskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+When summed twice with respect to time, the state as a function of control
+ inputs is obtained:
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+bigskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $\theta_{t+1}=\theta_{t}+r\frac{m_{w}}{I_{z}}\left[\gamma\dot{\phi_{L_{t}}}+\left(\gamma-2\delta\right)\dot{\phi_{R_{t}}}\right]\varDelta t$
+\end_inset
+
+ (8)
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+bigskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Consider the general expression for a dynamical system:
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+bigskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $x_{t+1}=f\left(x_{t},u_{t}\right)$
+\end_inset
+
+ (9)
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $y_{t+1}=f\left(x_{t+1},u_{t}\right)$
+\end_inset
+
+ (10)
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+bigskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+The first expression in matrix form is now:
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+bigskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $\left[\begin{array}{c}
+x\\
+y\\
+\theta
+\end{array}\right]_{t+1}=\left[\begin{array}{ccc}
+1 & 0 & 0\\
+0 & 1 & 0\\
+0 & 0 & 1
+\end{array}\right]\left[\begin{array}{c}
+x\\
+y\\
+\theta
+\end{array}\right]_{t}+rm_{w}\Delta t\left[\begin{array}{cc}
+\frac{1}{m_{c}}cos\theta_{t} & \frac{1}{m_{c}}cos\theta_{t}\\
+\frac{1}{m_{c}}cos\theta_{t} & \frac{1}{m_{c}}cos\theta_{t}\\
+\gamma\frac{1}{I_{z}} & \left(\gamma-2\delta\right)\frac{1}{I_{z}}
+\end{array}\right]\left[\begin{array}{c}
+\dot{\phi}_{L}\\
+\phi_{R}
+\end{array}\right]_{t}$
+\end_inset
+
+(11)
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+bigskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+The output equation (10) is piecewise nonlinear and cannot be expressed
+ in matrix format.
+ The function is setup as follows:
+\end_layout
+
+\begin_layout Standard
+\align center
+\begin_inset Graphics
+	filename OutputDiagram.png
+	lyxscale 35
+	scale 35
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $\begin{array}{cc}
+\theta_{0}=\tan^{-1}\left(\frac{\frac{h}{2}+y}{\frac{w}{2}-x}\right) & \theta_{7}=\tan^{-1}\left(\frac{\frac{h}{2}-y}{\frac{w}{2}-x}\right)\\
+\theta_{1}=\tan^{-1}\left(\frac{\frac{w}{2}-x}{\frac{h}{2}-y}\right) & \theta_{2}=\tan^{-1}\left(\frac{\frac{w}{2}+x}{\frac{h}{2}-y}\right)\\
+\theta_{3}=\tan^{-1}\left(\frac{\frac{h}{2}-y}{\frac{w}{2}+x}\right) & \theta_{4}=\tan^{-1}\left(\frac{\frac{h}{2}+y}{\frac{w}{2}+x}\right)\\
+\theta_{5}=\tan^{-1}\left(\frac{\frac{w}{2}+x}{\frac{h}{2}+y}\right) & \theta_{6}=\tan^{-1}\left(\frac{\frac{w}{2}-x}{\frac{h}{2}+y}\right)
+\end{array}$
+\end_inset
+
+ (12)
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+bigskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+The point of intersection with the left and right walls is determined by
+ finding the intersection of the line emanating from the robot's CM along
+ the body axis unit vector and the equation of the wall.
+ The equation of the line along the body x-axis 
+\begin_inset Formula $\left(f_{x}\right)$
+\end_inset
+
+ and y-axis 
+\begin_inset Formula $\left(f_{y}\right)$
+\end_inset
+
+:
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+bigskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $f_{y}=x\tan\theta_{0}-x_{0}\tan\theta_{0}+y_{o}$
+\end_inset
+
+ (13)
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $f_{x}=x\tan\left(\theta_{0}-\frac{\pi}{2}\right)-x_{0}\tan\left(\theta_{0}-\frac{\pi}{2}\right)+y_{o}$
+\end_inset
+
+ (14)
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+bigskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Then, logic is used to determine which angular region the individual axes
+ are in, as well as handling singularities in the tangent function:
+\end_layout
+
+\begin_layout Standard
+\align center
+\begin_inset Graphics
+	filename PiecewiseNonlinear.png
+	lyxscale 40
+	scale 40
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+The distance is then found by taking the l-2 norm of the differences between
+ the perimeter coordinates and the robot coordinates.
+\end_layout
+
+\begin_layout Standard
+\begin_inset Newpage pagebreak
+\end_inset
+
+
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+subsection*{Unscented Kalman Filter}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+The unscented Kalman filter (UKF) was chosen for this project due to its
+ simplicity relative to the extended Kalman Filter (EKF) and significant
+ improvement in accuracy.
+ The difference is that instead of linearizing the dynamical system, which
+ can cause large errors for large rates of change, it tracks a few points
+ (called sigma vectors whose values depend on scaling parameters and the
+ state covariance) by sending them through the nonlinear transformation,
+ along with the noise estimates, and then calculating their mean and covariance
+ using a weighted sum to get the expected mean and covariance of the state.
+ The following 3 images were taken from 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "key-2"
+
+\end_inset
+
+:
+\end_layout
+
+\begin_layout Standard
+\align center
+\begin_inset Graphics
+	filename KF_EKF_UKF.png
+	lyxscale 45
+	scale 45
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+The equations have been inserted from in the figure below.
+ The first image is the general algorithm and the second is how the sigma
+ vector and weights are calculated:
+\end_layout
+
+\begin_layout Standard
+\align center
+\begin_inset Graphics
+	filename Algorithm.png
+	lyxscale 50
+	scale 50
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\align center
+\begin_inset Graphics
+	filename SigmaWeights.png
+	lyxscale 45
+	scale 45
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+section*{Evaluation}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+subsection*{Demonstration}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+subsection*{Conclusion}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Bibliography
+\begin_inset CommandInset bibitem
+LatexCommand bibitem
+label "E. A. Wan, R. Van der Merwe, \"The unscented Kalman filter for nonlinear estimation\", Proc. Symp. Adaptive Syst. Signal Process. Commun. Contr., Oct. 2000."
+key "key-2"
+
+\end_inset
+
+
+\end_layout
+
+\end_body
+\end_document

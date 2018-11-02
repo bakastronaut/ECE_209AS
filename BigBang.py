@@ -6,7 +6,6 @@ Spyder Editor
 import numpy as np
 import warnings
 import matplotlib as mpl
-import time
 
 class BigBang:
 
@@ -206,6 +205,12 @@ class BigBang:
         return action
 
     def GetReward(self,ID):
+        '''
+        Returns the reward for a particular location on the grid.
+        
+        Inputs:
+            ID - INT corresponding to a grid ID (0 to 35 starting from top right)
+        '''
         return self.rewardspace[ID]
 
     def IsInterior(self,ID):
@@ -405,6 +410,8 @@ class BigBang:
             if state1 in group:
                 TotalProbability += P_path[i]
                 
+                # Assert value of total probability is valid
+                assert 0 <= TotalProbability <= 1
                 
                 # Cross check result with adjacency matrix
                 a_trans = action[0]
@@ -422,19 +429,12 @@ class BigBang:
                 idx = self.validdirections.index(direction)
                 
                 ID1 = state1[1]
-                if TotalProbability == 0:
-                    pass
-        #            errormsg = ' '.join(['Zero probability, non-zero adjacency entry:',str(state0),'->',str(state1),'via',str(action)])
-        #            assert self.adjacencytensor_trans[ID0,ID1,idx] == 0, errormsg
-                elif TotalProbability > 0:
+                if TotalProbability > 0:
                     errormsg = ' '.join(['Non-zero probability, zero adjacency entry.',str(state0),'->',str(state1),'via',str(action)])
                     assert self.adjacencytensor_trans[ID0,ID1,idx] == 1, errormsg
                 else:
                     errormsg = ' '.join(['Invalid probability value returned! Value:',str(TotalProbability)])
                     raise ValueError(errormsg)
-        
-        # Assert value of total probability is valid
-        assert 0 <= TotalProbability <= 1
         
         if debug:
             return TotalProbability,allstates
@@ -538,7 +538,7 @@ class BigBang:
                 self.policy[theta0,ID0,0] = a_trans_star
                 self.policy[theta0,ID0,1] = a_rot_star
         
-        ID_star = np.argmax(World.rewardspace)
+        ID_star = np.argmax(self.rewardspace)
         self.policy[:,ID_star,0] = 0
         self.policy[:,ID_star,1] = 0
     
@@ -636,6 +636,9 @@ class BigBang:
         return V1
 
     def ValueIteration(self,lookahead=1,iters_max = 200,threshold=0):
+        
+        assert lookahead == 1, "lookahead of 1 only accepted at this time"
+        
         i = 0
         diff = np.inf
         valuehist = []
@@ -645,29 +648,24 @@ class BigBang:
         policy0score = np.sum(V0)
         valuehist.append(policy0score)
         policy1 = self.policy
+        actions_list = [[1,-1],[1,0],[1,1],[0,0],[-1,-1],[-1,0],[-1,1]]
         
-        while diff > threshold and i <= iters_max:
+        converged = False
+        convergence_count = 0
+        while convergence_count < 20 and i <= iters_max:
             
             for theta0 in range(12):
                 
                 for ID0 in range(self.length*self.width):
                     state0 = [theta0,ID0]
-                    # Get ALL states adjacent to current state 
-                    # (regardless of which action will be chosen)
-                    if lookahead == 1:
-                        states_list,actions_list = self.GetAdjacentStates(state0)
-                    else:
-                        raise ValueError('Does not support lookahead > 1 yet.')
-                    
                     # Iterate through all possible actions. For each action,
                     # calculate the value when trying to reach all states 
                     # adjacent to state0.
                     values = []
                     for action in actions_list:
                         v = 0   # Value for a certain action
-                        for state1 in states_list:
-                            theta1 = state1[0]
-                            ID1 = state1[1]
+                        for theta1,ID1 in zip(range(12),range(self.length*self.width)):
+                            state1 = [theta1,ID1]
                             Likelihood = self.Probability(state0,action,state1)
                             ROI = self.rewardspace[ID1] + self.gamma*V0[theta1,ID1]
                             v += Likelihood*ROI
@@ -675,7 +673,7 @@ class BigBang:
                     
                     assert len(values) != 0
                     
-                    indices_max = [i for i in range(len(values)) if values[i] == np.min(values)]
+                    indices_max = [i for i in range(len(values)) if values[i] == np.max(values)]
                     # If multiple entries are equal, randomly choose one as highest.
                     # Otherwise, go with argmax of values.
                     if len(indices_max) > 1:
@@ -695,19 +693,29 @@ class BigBang:
             valuehist.append(policy1score)
             
             diff = abs(policy1score - policy0score)
+            if diff == 0:
+                convergence_count += 1
+            elif diff < 0:
+                raise ValueError('Negative difference in value iteration should not be happening!')
+            else:
+                convergence_count = 0
+            
+            if convergence_count == 20:
+                converged = True
             V0 = 1*V1
             policy0score = 1*policy1score
             i += 1
         
         # If one of the while loop criteria are invalid:
-        if diff <= threshold:
-            self.policy = policy1   # Store optimal policy
-            self.PolicyValue = V1   # Store value of optimal policy
-            msg = ' '.join(['Algorithm converged in',str(i-1),'iterations. New policy has been saved.'])
-        elif i >= iters_max:
-            msg = ' '.join(['Algorithm reached maximum number of iterations with value difference',str(diff)])
-        
-        print(msg)
+        if converged:
+            if diff <= threshold:
+                self.policy = policy1   # Store optimal policy
+                self.PolicyValue = V1   # Store value of optimal policy
+                msg = ' '.join(['Value iteration converged in',str(i-1),'iterations. New policy has been saved.'])
+            elif i >= iters_max:
+                msg = ' '.join(['Value iteration reached maximum number of iterations with value difference',str(diff)])
+            
+            print(msg)
         
         return valuehist
     
@@ -840,7 +848,7 @@ class BigBang:
                     
                     assert len(values) != 0
                     
-                    indices_max = [i for i in range(len(values)) if values[i] == np.min(values)]
+                    indices_max = [i for i in range(len(values)) if values[i] == np.max(values)]
                     # If multiple entries are equal, randomly choose one as highest.
                     # Otherwise, go with argmax of values.
                     if len(indices_max) > 1:
@@ -1052,19 +1060,21 @@ def drawArrow(Werld,state,ax):
                 xytext=xytext,
                 arrowprops=dict(facecolor='black'))
 
-def plotPolicy(Policy_Aprx,StateValue,Werld,title=[]):
+def plotPolicy(Werld,theta0,title=[]):
     '''
     Plot a policy on the grid space
     '''
     
+    Policy = Werld.policy[theta0,:,1]    # Only using rotation policy for plot
+    Temperature = np.hstack([row for row in Werld.rewardspace])
+    
     # Initialize state value matrix
     StateValue_matrix = np.zeros([6,6])
-    N_states = len(Policy_Aprx)
+    N_states = len(Policy)
     
     # If state values weren't provided, set all the values to zero for the plot.
-    if StateValue != []:
-        for s in range(N_states):
-            StateValue_matrix[s%6,s//6] = StateValue[s]
+    for s in range(N_states):
+        StateValue_matrix[s//6,s%6] = Temperature[s]
     
     # Prepare the figure
     fig = mpl.pyplot.figure(figsize=(10,8))
@@ -1074,7 +1084,7 @@ def plotPolicy(Policy_Aprx,StateValue,Werld,title=[]):
     
     # Draw arrows for each state
     for ID in np.arange(N_states):
-        theta = Policy_Aprx[ID]
+        theta = theta0 + Policy[ID]
         drawArrow(Werld,[theta,ID],ax)
     
     # If a title was provided, add it to the plot.
