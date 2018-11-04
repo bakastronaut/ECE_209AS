@@ -70,6 +70,58 @@
 
 \begin_body
 
+\begin_layout Title
+Bakari Hassan - Problem Set 3 - ECE 209AS
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+section*{Preliminaries}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Enumerate
+Github Link: 
+\begin_inset Flex URL
+status open
+
+\begin_layout Plain Layout
+
+https://github.com/bakastronaut/ECE_209AS_PSETS/tree/master/Homework3
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Enumerate
+No collaboration involved with my submission.
+ I did help Solomon/Jay.
+\end_layout
+
+\begin_layout Enumerate
+I referred to a paper to write the UKF code (see references)
+\end_layout
+
+\begin_layout Enumerate
+All contributions were mine
+\end_layout
+
+\begin_layout Enumerate
+100 % - Bakari Hassan
+\end_layout
+
 \begin_layout Standard
 \begin_inset ERT
 status open
@@ -128,7 +180,7 @@ I was planning to relax this assumption, but did not have time.
 The problem was setup using two reference frames: 1) Body-fixed frame 2)
  Earth- (World-) fixed frame.
  The body-fixed frame is indicated by the primed vectors.
- The x'-axis is forward-facing, the y'-axis extend from the left side of
+ The x'-axis is forward-facing, the y'-axis extends from the left side of
  the vehicle, and the z'-axis completes the orthogonal system.
  The Earth-fixed frame is defined with the z-axis pointing downwards as
  well.
@@ -147,7 +199,7 @@ The problem was setup using two reference frames: 1) Body-fixed frame 2)
 \end_layout
 
 \begin_layout Standard
-Using Newton's second law for in the body frame (primed variables), forces
+Using Newton's second law for the body frame (primed variables), forces
  are only applied along the x-axis.
  The equation of motion (EOM) becomes:
 \begin_inset ERT
@@ -186,9 +238,9 @@ bigskip
 \end_layout
 
 \begin_layout Standard
-The dynamics equations are discretely summed once (integral analog) to get
- the body x frame velocity, which is then transformed to the world frame
- using a 2D rotation matrix.
+The dynamics equations are discretely summed once (the integral analog)
+ to get the body frame's velocity along x', which is then transformed to
+ the world frame using a 2D rotation matrix.
  Those equations are then integrated to get x position as a function of
  the two wheel angular velocities:
 \begin_inset ERT
@@ -234,7 +286,7 @@ bigskip
 \end_layout
 
 \begin_layout Standard
-Then, Newton's second analog is applied for torques about the body z axis:
+Then, Newton's second law is applied for torques about the body z axis:
 \begin_inset ERT
 status open
 
@@ -275,8 +327,8 @@ where
 \begin_inset Formula $I_{z}$
 \end_inset
 
- the rotational inertia about the z-axis, assumed to be a cylinder rotating
- about its primary axis:
+ is the rotational inertia about the z-axis, which is calculated assuming
+ the car is a cylinder rotating about its primary axis:
 \begin_inset ERT
 status open
 
@@ -316,7 +368,12 @@ bigskip
 Before summing the torques, the center of torque must be found as a function
  of the torques produced by the individual wheels.
  This is done by setting the torques equal to each other and solving for
- the moment arm of the left motor:
+ the moment arm of the left motor 
+\begin_inset Formula $\left(\gamma\right)$
+\end_inset
+
+ under the constraint that the sum of the moment arms is equal to the width
+ of the car:
 \begin_inset ERT
 status open
 
@@ -486,7 +543,7 @@ bigskip
 \end_layout
 
 \begin_layout Standard
-Consider the general expression for a dynamical system:
+Now, consider the general expression for a dynamical system:
 \begin_inset ERT
 status open
 
@@ -530,7 +587,7 @@ bigskip
 \end_layout
 
 \begin_layout Standard
-The first expression in matrix form is now:
+The first expression (9) in matrix form is now:
 \begin_inset ERT
 status open
 
@@ -565,7 +622,7 @@ y\\
 \gamma\frac{1}{I_{z}} & \left(\gamma-2\delta\right)\frac{1}{I_{z}}
 \end{array}\right]\left[\begin{array}{c}
 \dot{\phi}_{L}\\
-\phi_{R}
+\dot{\phi_{R}}
 \end{array}\right]_{t}$
 \end_inset
 
@@ -604,6 +661,10 @@ The output equation (10) is piecewise nonlinear and cannot be expressed
 \end_layout
 
 \begin_layout Standard
+where:
+\end_layout
+
+\begin_layout Standard
 \begin_inset Formula $\begin{array}{cc}
 \theta_{0}=\tan^{-1}\left(\frac{\frac{h}{2}+y}{\frac{w}{2}-x}\right) & \theta_{7}=\tan^{-1}\left(\frac{\frac{h}{2}-y}{\frac{w}{2}-x}\right)\\
 \theta_{1}=\tan^{-1}\left(\frac{\frac{w}{2}-x}{\frac{h}{2}-y}\right) & \theta_{2}=\tan^{-1}\left(\frac{\frac{w}{2}+x}{\frac{h}{2}-y}\right)\\
@@ -629,9 +690,9 @@ bigskip
 \end_layout
 
 \begin_layout Standard
-The point of intersection with the left and right walls is determined by
- finding the intersection of the line emanating from the robot's CM along
- the body axis unit vector and the equation of the wall.
+The point of intersection with the walls is determined by finding the intersecti
+on of the line emanating from the robot's CM along the body axis unit vector
+ and the equation of the wall.
  The equation of the line along the body x-axis 
 \begin_inset Formula $\left(f_{x}\right)$
 \end_inset
@@ -675,6 +736,27 @@ status open
 
 
 \backslash
+medskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+where 
+\begin_inset Formula $\left(x_{0},y_{0}\right)$
+\end_inset
+
+ is the robot's position.
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
 bigskip
 \end_layout
 
@@ -684,8 +766,8 @@ bigskip
 \end_layout
 
 \begin_layout Standard
-Then, logic is used to determine which angular region the individual axes
- are in, as well as handling singularities in the tangent function:
+Then, logic is used to determine which of the four angular regions the individua
+l axes are in, as well as handling singularities in the tangent function:
 \end_layout
 
 \begin_layout Standard
@@ -701,8 +783,52 @@ Then, logic is used to determine which angular region the individual axes
 \end_layout
 
 \begin_layout Standard
-The distance is then found by taking the l-2 norm of the differences between
- the perimeter coordinates and the robot coordinates.
+The distance is then found by taking the 
+\begin_inset Formula $\text{ℓ}\textrm{-2}$
+\end_inset
+
+ norm of the differences between the perimeter coordinates 
+\begin_inset Formula $\left(X,Y\right)$
+\end_inset
+
+ and the robot coordinates 
+\begin_inset Formula $\left(x_{0},y_{0}\right)$
+\end_inset
+
+:
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+medskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $\textrm{dist}=\sqrt{\left(X-x_{0}\right)^{2}+\left(Y-y_{0}\right)^{2}}$
+\end_inset
+
+
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+bigskip
+\end_layout
+
+\end_inset
+
+
 \end_layout
 
 \begin_layout Standard
@@ -726,9 +852,9 @@ subsection*{Unscented Kalman Filter}
 \end_layout
 
 \begin_layout Standard
-The unscented Kalman filter (UKF) was chosen for this project due to its
- simplicity relative to the extended Kalman Filter (EKF) and significant
- improvement in accuracy.
+The unscented Kalman filter (UKF) was chosen for this project due to an
+ incremental increase in complexity relative to the extended Kalman Filter
+ (EKF), but its significant improvement in accuracy over the EKF.
  The difference is that instead of linearizing the dynamical system, which
  can cause large errors for large rates of change, it tracks a few points
  (called sigma vectors whose values depend on scaling parameters and the
@@ -820,6 +946,411 @@ subsection*{Demonstration}
 \end_layout
 
 \begin_layout Standard
+Five trials were run to test the effectiveness of the UKF:
+\end_layout
+
+\begin_layout Enumerate
+Initial state uncertainty (no environment or sensor noise)
+\end_layout
+
+\begin_layout Enumerate
+Finite enviornment covariance (no initital state uncertainty or sensor noise)
+\end_layout
+
+\begin_layout Enumerate
+Finite sensor covariance (no initial state uncertainty or enviornment noise)
+\end_layout
+
+\begin_layout Enumerate
+Initial state uncertainty with sensor noise (no environment noise)
+\end_layout
+
+\begin_layout Enumerate
+Initial state uncertainty with sensor and environment noise
+\end_layout
+
+\begin_layout Standard
+The control inputs for each scenario are identical.
+ The right wheel is kept at a constant rotational velocity of 5 radians
+ per second with the left wheel velocity ramped from 0 to 4.75 radians per
+ second.
+ This creates a nice spiral-out, spiral-in trajectory.
+\end_layout
+
+\begin_layout Standard
+\begin_inset Newpage pagebreak
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+subsubsection*{Case 1: Initial State Uncertainty}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+The first scenario is one in which there is uncertainty in the initial state.
+ Overall, the Kalman filter did a good job estimating the state, with the
+ estimation error converging over the duration from the beginning to end
+ of the trajectory.
+ This is apparent in the trajectory plot (top left) when comparing the initial
+ offset to the final offset.
+ The following covariance matrix was used:
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+bigskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $\sum=\begin{array}{ccc}
+0.001 & 0 & 0\\
+0 & 0.001 & 0\\
+0 & 0 & 0.001
+\end{array}m^{2}$
+\end_inset
+
+
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+bigskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+It can also be seen in the absolute error plot below the trajectory plot
+ with the final errors beginning above 0.01 and both ending below.
+ Finally, the plot at the top right shows the offset (both positive and
+ negative) through time.
+ At the end, the estimated x position is almost indiscernible from the true
+ x position.
+ Although the heading increased, it was by a negligible amount, on the order
+ of a micro radian.
+\end_layout
+
+\begin_layout Standard
+\align center
+\begin_inset Graphics
+	filename UKF_State.png
+	lyxscale 35
+	scale 35
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Newpage pagebreak
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+subsubsection*{Case 2: Environment Noise}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+The second scenario is one in which there is environmental noise, meaning
+ the robot's actions result in uncertain actions such as slipping.
+ Overall, the Kalman filter performed similarly to the case with state uncertain
+ty, with the estimation error converging over the duration from the beginning
+ to end of the trajectory.
+ This is apparent in the trajectory plot (top left) when comparing the initial
+ offset to the final offset.
+ The following covariance matrix was used:
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+bigskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $\sum=1\times10^{-5}\begin{array}{ccc}
+0.0025 & 0 & 0\\
+0 & 0.0025 & 0\\
+0 & 0 & 0.0000
+\end{array}m^{2}$
+\end_inset
+
+
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+bigskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+However, different from the previous trial, the error increases from 0 to
+ values similar to the previous trial.
+ The initial low value is expected because there was no uncertainty in the
+ initial state.
+ But the fact that they ended at the same position highlights the divergence.
+ Finally, the plot at the top right shows the offset (both positive and
+ negative) through time.
+ In this case, the y error was smaller than the x error, likely due to the
+ trajectory including more y translation than x translation.
+ This can affect the measurements used to gain confidence in estimations.
+ In this case, the heading error essentially remained constant on the scale
+ of sub-micro radian errors.
+\end_layout
+
+\begin_layout Standard
+\align center
+\begin_inset Graphics
+	filename UKF_Environment.png
+	lyxscale 35
+	scale 35
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Newpage pagebreak
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+subsubsection*{Case 3: Sensor Noise}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+This scenario is one in which there is sensor noise.
+ This case had the best performance overall.
+ The true and estimated trajectories are almost identical, with all estimation
+ errors less than 1 mm in magnitude outside of a brief period between 350
+ and 325 seconds.
+ The following covariance matrix was used:
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+bigskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $\sum=1\times10^{-4}\begin{array}{ccc}
+0.006 & 0 & 0\\
+0 & 0.006 & 0\\
+0 & 0 & 1\times10^{-6}
+\end{array}m^{2}$
+\end_inset
+
+
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+bigskip
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Sensor noise did not appear to have a large effect on the state estimator's
+ performance.
+ Additionally, the estimated trajectory is very smooth, meaning the sensor
+ noise did not affect the mapping from control inputs to physical actions.
+ This makes sense because the noise term for sensors is not in the state
+ update equation.
+ They should only affect the confidence in the current state.
+\end_layout
+
+\begin_layout Standard
+\align center
+\begin_inset Graphics
+	filename UKF_Sensor.png
+	lyxscale 35
+	scale 35
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Newpage pagebreak
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+subsubsection*{Case 4: State Uncertainty with Sensor Noise}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Scenario four was run as a follow-on to scenario three to see how the unscented
+ Kalman filter performed with both initial state uncertainty and sensor
+ noise.
+ As I expected, the sensor noise made the state uncertainty higher, resulting
+ in larger absolute errors for translation state estimation.
+ The same covariance matrices were used for this case that were used for
+ the two cases above for the individual scenarios involving initial state
+ uncertainty and sensor noise.
+\end_layout
+
+\begin_layout Standard
+\align center
+\begin_inset Graphics
+	filename UKF_State_Sensor.png
+	lyxscale 35
+	scale 35
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Newpage pagebreak
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+subsubsection*{Case 5: State Uncertainty with Sensor and Environment Noise}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+The fifth scenario combined all noise and uncertainty sources.
+ The unscented Kalman filter did very well in this situation.
+ It outperformed all cases other than the third case that only contained
+ sensor noise.
+ This was unexpected, as the combined case was expected to be the worst-performi
+ng case.
+ 
+\end_layout
+
+\begin_layout Standard
+\align center
+\begin_inset Graphics
+	filename UKF_State_Environment_Sensor.png
+	lyxscale 35
+	scale 35
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
 \begin_inset ERT
 status open
 
@@ -835,15 +1366,41 @@ subsection*{Conclusion}
 
 \end_layout
 
+\begin_layout Standard
+Overall, the UKF did a really good job on the state estimation.
+ It managed to keep all estimation errors below 0.02 meters (20 mm) for a
+ maximum y position offset of 200 mm, which is 10 percent of the traveled
+ distance.
+ This would be suitable as long as no precision position knowledge is needed
+ for an appliaction.
+ 
+\end_layout
+
+\begin_layout Standard
+One way to improve this filter could be to use machine learning to learn
+ the noise characteristics of the sensors.
+ If learned well, the filter could predict the noise for each time step
+ more effectively than a pure statistical approach based on mean and covariance.
+\end_layout
+
 \begin_layout Bibliography
 \begin_inset CommandInset bibitem
 LatexCommand bibitem
-label "E. A. Wan, R. Van der Merwe, \"The unscented Kalman filter for nonlinear estimation\", Proc. Symp. Adaptive Syst. Signal Process. Commun. Contr., Oct. 2000."
 key "key-2"
 
 \end_inset
 
-
+E.
+ A.
+ Wan, R.
+ Van der Merwe, "The unscented Kalman filter for nonlinear estimation",
+ Proc.
+ Symp.
+ Adaptive Syst.
+ Signal Process.
+ Commun.
+ Contr., Oct.
+ 2000.
 \end_layout
 
 \end_body

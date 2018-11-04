@@ -21,17 +21,19 @@ def plot_results_ukf(state,output,command,state_true,title=''):
     linestyle0 = 'solid'
     linestyle1 = 'dashed'
     # Plot the trajectory
-    dims = (5,4)
+    dims = (6,4)
     mpl.pyplot.figure(np.random.randint(low=0,high=100))
-    mpl.pyplot.title(title)
     mpl.pyplot.subplot2grid(dims,(0,0),rowspan=5,colspan=2)
-    mpl.pyplot.plot(state_true[0,:],state_true[1,:],color=color0,linestyle=linestyle0)
-    mpl.pyplot.plot(state[0,:],state[1,:],color=color0,linestyle=linestyle1)
-    mpl.pyplot.legend(['True State','Estimated State'])
+    mpl.pyplot.plot(state_true[0,1:],state_true[1,1:],color=color0,linestyle=linestyle0)
+    mpl.pyplot.plot(state[0,1:],state[1,1:],color=color0,linestyle=linestyle1)
+    mpl.pyplot.scatter(state_true[0,0],state_true[1,0],c='r',marker='*')
+    mpl.pyplot.ylabel('Y Position (Meters)')
+    mpl.pyplot.title('Trajectory')
     
     color_border = 'C3'
     linestyle_border = 'dotted'
     mpl.pyplot.plot([-250E-3,250E-3],[375E-3,375E-3],color=color_border,linestyle=linestyle_border)
+    mpl.pyplot.legend(['True State','Estimated State','Boundary','Starting Point'],ncol=4)
     mpl.pyplot.plot([250E-3,250E-3],[375E-3,-375E-3],color=color_border,linestyle=linestyle_border)
     mpl.pyplot.plot([-250E-3,250E-3],[-375E-3,-375E-3],color=color_border,linestyle=linestyle_border)
     mpl.pyplot.plot([-250E-3,-250E-3],[-375E-3,375E-3],color=color_border,linestyle=linestyle_border)
@@ -45,47 +47,70 @@ def plot_results_ukf(state,output,command,state_true,title=''):
     mpl.pyplot.ylim(k*ymin,k*ymax)
     
     # Plot the translation state history
-    xvals = dt*np.arange(0,np.shape(state)[1])
+    xvals = dt*np.arange(0,np.shape(state[:,1:])[1])
     mpl.pyplot.subplot2grid(dims,(0,2),colspan=2)
-    mpl.pyplot.plot(xvals,state_true[0,:],color=color0,linestyle=linestyle0)
-    mpl.pyplot.plot(xvals,state_true[1,:],color=color1,linestyle=linestyle0)
-    mpl.pyplot.plot(xvals,state[0,:],color=color0,linestyle=linestyle1)
-    mpl.pyplot.plot(xvals,state[1,:],color=color1,linestyle=linestyle1)
-    mpl.pyplot.legend(['True x','True y','Est x','Est - y'])
+    mpl.pyplot.plot(xvals,state_true[0,1:],color=color0,linestyle=linestyle0)
+    mpl.pyplot.plot(xvals,state_true[1,1:],color=color1,linestyle=linestyle0)
+    mpl.pyplot.plot(xvals,state[0,1:],color=color0,linestyle=linestyle1)
+    mpl.pyplot.plot(xvals,state[1,1:],color=color1,linestyle=linestyle1)
+    mpl.pyplot.legend(['True x','True y','Est x','Est y'],ncol=2)
+    mpl.pyplot.ylabel('Distance (m)')
     
     # Plot the translation output history
     mpl.pyplot.subplot2grid(dims,(1,2),colspan=2)
-    mpl.pyplot.plot(xvals,output[0,:])
-    mpl.pyplot.plot(xvals,output[1,:])
-    mpl.pyplot.legend(['output - x','output - y'])
+    mpl.pyplot.plot(xvals,output[0,1:])
+    mpl.pyplot.plot(xvals,output[1,1:])
+    mpl.pyplot.ylabel('Distance (m)')
+    mpl.pyplot.legend(['output - x','output - y'],ncol=2)
     
     # Plot the rotation state history
     k = 0.1
     mpl.pyplot.subplot2grid(dims,(2,2),colspan=2)
-    mpl.pyplot.plot(xvals,state_true[2,:],color=color0,linestyle=linestyle0)
-    mpl.pyplot.plot(xvals,state[2,:],color=color0,linestyle=linestyle1)
-    ymin = np.min(state[2,:])
-    ymax = np.max(state[2,:])
+    mpl.pyplot.plot(xvals,state_true[2,1:],color=color0,linestyle=linestyle0)
+    mpl.pyplot.plot(xvals,state[2,1:],color=color0,linestyle=linestyle1)
+    
+    ymin = np.min(state[2,1:])
+    ymax = np.max(state[2,1:])
     mpl.pyplot.ylim([ymin - k,ymax + k])
     mpl.pyplot.ticklabel_format(axis='y',useOffset=False)
-    mpl.pyplot.legend(['True Heading','Est Heading'])
+    mpl.pyplot.ylabel('Heading (rad)')
+    mpl.pyplot.legend(['True Heading','Est Heading'],ncol=2)
     
     # Plot the rotation output history
     mpl.pyplot.subplot2grid(dims,(3,2),colspan=2)
-    mpl.pyplot.plot(xvals,output[2,:])
-    ymin = np.min(output[2,:])
-    ymax = np.max(output[2,:])
+    mpl.pyplot.plot(xvals,output[2,1:])
+    ymin = np.min(output[2,1:])
+    ymax = np.max(output[2,1:])
     mpl.pyplot.ylim([ymin - k,ymax + k])
     mpl.pyplot.ticklabel_format(axis='y',useOffset=False)
+    mpl.pyplot.ylabel('Heading (rad)')
     mpl.pyplot.legend(['Output - Heading'])
     
     # Plot the control history
-    xvals = np.arange(0,np.shape(command)[1])
+    xvals = dt*np.arange(0,np.shape(command[:,1:])[1])
     mpl.pyplot.subplot2grid(dims,(4,2),colspan=2)
-    mpl.pyplot.plot(xvals,command[0,:])
-    mpl.pyplot.plot(xvals,command[1,:])
-    mpl.pyplot.legend(['phi_dot_left','phi_dot_right'])
+    mpl.pyplot.plot(xvals,command[0,1:])
+    mpl.pyplot.plot(xvals,command[1,1:])
+    mpl.pyplot.ylabel('Angular Vel (rad/sec)')
+    mpl.pyplot.legend(['phi_dot_left','phi_dot_right'],ncol=2)
     
+    xvals = dt*np.arange(0,len(state[0,1:]))
+    mpl.pyplot.subplot2grid(dims,(5,0),colspan=2)
+    
+    ae0 = np.abs(state[0,1:] - state_true[0,1:])
+    mpl.pyplot.plot(xvals,ae0,color=color0,linestyle=linestyle0)
+    ae1 = np.abs(state[1,1:] - state_true[1,1:])
+    mpl.pyplot.plot(xvals,ae1,color=color1,linestyle=linestyle0)
+    mpl.pyplot.xlabel('Time (seconds)')
+    mpl.pyplot.ylabel('Est. Error (m)')
+    mpl.pyplot.legend(['x position','y position'],ncol=2)
+    
+    mpl.pyplot.subplot2grid(dims,(5,2),colspan=2)
+    ae2 = np.abs(state[2,1:] - state_true[2,1:])
+    mpl.pyplot.plot(xvals,ae2,color=color0,linestyle=linestyle0)
+    mpl.pyplot.xlabel('Time (seconds)')
+    mpl.pyplot.ylabel('Est. Error (rad)')
+    mpl.pyplot.legend(['Heading'])
     mpl.pyplot.show()
     
 def compose_A():
@@ -242,7 +267,7 @@ def ukf_time_update(F,H,A,B,u,Xx_j,Xw_j,Xv_j,Wm,Wc):
     
     L = np.shape(Xx_j)[0]
     
-    Xx_k_given_j = F(A,Xx_j,B,u,Xw_j)
+    Xx_k_given_j = F(A,Xx_j,B,u,Xw_j) + sw_j_pred
     s_k_minus = np.sum( [Wm[i,0] * Xx_k_given_j[:,i:i+1] for i in range(2*L+1)] ,axis=0)
     
     Y_k_given_j = measurement_model(Xx_k_given_j) + Xv_j #H(C,Xx_k_given_j,Xv_j)
@@ -362,10 +387,10 @@ def get_intercept(x,y,theta,h,w,thresh=1000):
     theta_wall_L = [np.arctan2(b,-c),            np.arctan2(-a,-c) + 2*np.pi]
     theta_wall_B = [np.arctan2(-a,-c) + 2*np.pi, np.arctan2(-a,d) + 2*np.pi]
     
-    g_r = [w/2,np.inf]
-    g_t = [np.inf,h/2]
-    g_l = [-w/2,np.inf]
-    g_b = [np.inf,-h/2]
+    g_r = [w/2,np.inf]  # Right wall is at x = w/2 and does not intersect y axis
+    g_t = [np.inf,h/2]  # Top wall (ditto)
+    g_l = [-w/2,np.inf] # Left wall is at x = -w/2 and does not intersect y axis
+    g_b = [np.inf,-h/2] # Bottom wall (ditto)
     
     # Only tangent explosion must be worried about for left and right walls 
     # because the 0 case generalizes and still intercepts the Y axis.
@@ -433,6 +458,7 @@ def get_intercept(x,y,theta,h,w,thresh=1000):
             X = (1/tan_theta) * (Y + x*tan_theta - y)
     
     dist = np.linalg.norm([(X-x),(Y-y)])
+    dist *= 1E-3
     return dist
 
 def F(A,s,B,u,w):
@@ -461,20 +487,18 @@ def plot_center_of_rotation():
     mpl.pyplot.legend(['2 * delta'])
     mpl.pyplot.savefig('CenterOfRotation.png')
 
-def compose_w(Q):
+def compose_cov(Q):
     samples = np.random.multivariate_normal([0,0,0],Q,size=1)
     
     return samples.T
 
-def compose_v(V):
-    samples = compose_w(V)
-    return samples.T
-
 ###############################################################################
 ###############################################################################
 ###############################################################################
 ###############################################################################
     
+np.random.seed(5)
+
 m_c = 0.3
 m_w = 0.05
 r = 20E-3       # 20 mm
@@ -497,7 +521,7 @@ y_hist_ukf = np.zeros([3,np.shape(u_hist)[1]+1])
 
   # rad/sec/volt # motor control gain
 
-x_start,y_start,theta_start = 0,0,np.pi/4
+x_start,y_start,theta_start = 0,0,0
 s0 = np.array([[x_start,y_start,theta_start]]).T
 y0 = 1*s0
 u0 = np.array([[u_hist[0][0],u_hist[1][0]]]).T
@@ -526,13 +550,13 @@ sig_imu = 0.001**2  # 0.1 RMS specified in datasheet
 
 a = 1
 mean_state = np.array([[x_start],[y_start],[theta_start]])
-cov_state = a*cov_mat(s00=0,s11=0,s22=0)
+cov_state = a*cov_mat(s00=0.001,s11=0.001,s22=0.001)
 
-b = 0.0001
+b = 1E-5
 mean_environ = np.array([[0],[0],[0]])
 cov_environ = b*cov_mat(s00=sig_slip,s11=sig_slip,s22=0)
 
-c = 0.000001
+c = 1E-4
 mean_sensor = np.array([[0],[0],[0]])
 cov_sensor = c*cov_mat(s00=sig_x,s11=sig_y,s22=sig_imu)
 
@@ -543,6 +567,7 @@ distr_sensor = [mean_sensor,cov_sensor]
 covariance_hist = [np.linalg.det(cov_state)]
 
 sx_j_pred,sw_j_pred,sv_j_pred,Px,Pw,Pv = ukf_init2(distr_state,distr_environ,distr_sensor)
+sx_j_pred = np.reshape(np.random.multivariate_normal([0,0,0],cov_state,size=1),(3,1))
 for n in range(np.shape(u_hist)[1]):
     u_k = u_hist[:,n:(n+1)]
     
@@ -564,8 +589,8 @@ for n in range(np.shape(u_hist)[1]):
     
     # Get variables for next iteration
     sx_j_pred = s_k
-    sw_j_pred = compose_w(cov_environ)
-    sv_j_pred = compose_w(cov_sensor)
+    sw_j_pred = compose_cov(cov_environ)
+    sv_j_pred = compose_cov(cov_sensor)
     
     B = compose_B(sx_j_pred,u_k)
     
